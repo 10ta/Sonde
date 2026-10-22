@@ -1,0 +1,298 @@
+/* Sonde 组件样式：沿用 1999 主题的粗边框 + 硬阴影 + 强调色页头（与 Sabonner 同源） */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  font-family: 'Archivo Black', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+  font-weight: 400;
+}
+
+a { color: inherit; }
+button { font: inherit; color: inherit; }
+.muted { color: var(--text-muted); }
+.num { font-variant-numeric: tabular-nums; }
+[hidden] { display: none !important; }
+
+/* 每块表面的内部细线：本身墨色与纸色的混合 */
+.card, .theme-menu { --line: color-mix(in srgb, var(--black) var(--line-mix), var(--white)); }
+
+/* ---------- 页头 ---------- */
+.header {
+  position: relative;
+  z-index: 100;
+  background: var(--accent);
+  color: var(--black);
+  border-bottom: var(--border-width) solid var(--black);
+}
+.header-content {
+  display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+  padding: 0.85rem 1.5rem;
+  border-bottom: 3px solid var(--black);
+}
+.logo { display: flex; align-items: center; gap: 0.75rem; text-decoration: none; color: var(--black); }
+.logo h1 { font-size: 1.5rem; }
+.logo-mark {
+  width: 22px; height: 22px;
+  background: var(--black);
+  box-shadow: inset 0 0 0 5px var(--black), inset 0 0 0 11px var(--white);
+}
+.header-controls { display: flex; gap: 0.5rem; }
+
+.btn-square {
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--white); color: var(--black);
+  border: 3px solid var(--black);
+  box-shadow: 3px 3px 0 var(--shadow);
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+.btn-square:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 var(--shadow); }
+.btn-square:active { transform: translate(3px, 3px); box-shadow: none; }
+.btn-square[aria-expanded="true"] { background: var(--black); color: var(--white); }
+.btn-square.spin svg { animation: spin 0.6s linear; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- 统计条 ---------- */
+.stats-bar { display: flex; overflow-x: auto; }
+.stat-item {
+  flex: 1; min-width: 90px;
+  padding: 0.7rem 1rem;
+  border-right: 3px solid var(--black);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.stat-item:last-child { border-right: none; }
+.stat-value { font-family: 'Archivo Black', sans-serif; font-size: 1.5rem; line-height: 1.1; color: var(--black); }
+.stat-label { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em; color: var(--text-muted); }
+
+/* ---------- 主体 ---------- */
+.main { flex: 1; width: 100%; max-width: 1480px; margin: 0 auto; padding: 1.5rem; }
+
+.section { margin-bottom: 2.25rem; }
+.sec-head {
+  display: flex; align-items: baseline; gap: 0.75rem; flex-wrap: wrap;
+  margin-bottom: 1rem; padding-bottom: 0.4rem;
+  border-bottom: 4px solid var(--black);
+}
+.sec-head h2 { font-size: 1.4rem; }
+.sec-note { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; color: var(--text-muted); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 1.5rem; align-items: start; }
+.grid-wide { grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr)); }
+
+/* ---------- 卡片 ---------- */
+.card {
+  position: relative;
+  background: var(--card-bg);
+  border: var(--border-width) solid var(--black);
+  box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--shadow);
+  display: flex; flex-direction: column;
+  min-width: 0;
+}
+.card-head {
+  display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+  padding: 0.7rem 0.9rem;
+  border-bottom: 3px solid var(--black);
+}
+.card-head h3 { font-size: 1.05rem; margin-right: auto; min-width: 0; overflow-wrap: anywhere; }
+.card-body { padding: 0.85rem 0.9rem; display: flex; flex-direction: column; gap: 0.8rem; }
+.card-foot {
+  display: flex; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap;
+  padding: 0.45rem 0.9rem;
+  border-top: 2px solid var(--line);
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; color: var(--text-muted);
+}
+
+/* 离线：斜纹盖住，内容仍可读（是最后一次的数据） */
+.card.offline { box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--accent-red); }
+.card.offline .card-body { background: repeating-linear-gradient(-45deg, transparent 0 8px, var(--hatch) 8px 10px); }
+
+/* ---------- 徽章 ---------- */
+.badge {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  height: 24px; padding: 0 0.45rem;
+  border: 2px solid var(--black);
+  font: 700 0.7rem 'Space Grotesk', sans-serif; letter-spacing: 0.06em; text-transform: uppercase;
+  white-space: nowrap;
+  background: var(--card-bg);
+}
+.badge.ok   { background: var(--sig-1); color: #000; }
+.badge.warn { background: var(--sig-4); color: #000; }
+.badge.bad  { background: var(--accent-red); color: #fff; }
+.badge.info { background: var(--accent-blue); color: #fff; }
+.badge.ink  { background: var(--black); color: var(--white); }
+.badge.off  { background: repeating-linear-gradient(-45deg, var(--card-bg) 0 4px, var(--hatch) 4px 6px); }
+
+/* ---------- 额度条 ---------- */
+.metric { display: grid; grid-template-columns: 1fr auto; gap: 0.3rem 0.75rem; align-items: center; }
+.metric-label { font-weight: 700; font-size: 0.85rem; min-width: 0; overflow-wrap: anywhere; }
+.metric-pct { font-family: 'Archivo Black', sans-serif; font-size: 0.95rem; }
+.metric-pct.l4 { color: var(--sig-text-4); }
+.metric-pct.l5 { color: var(--sig-text-5); text-decoration: underline 3px; text-underline-offset: 3px; }
+.metric-detail { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; font-size: 0.75rem; color: var(--text-muted); }
+.metric-detail .spark { flex: 0 0 96px; height: 22px; }
+
+.bar {
+  grid-column: 1 / -1;
+  position: relative;
+  height: 16px;
+  border: 2px solid var(--black);
+  background: repeating-linear-gradient(90deg, transparent 0 calc(10% - 2px), var(--line) calc(10% - 2px) 10%);
+}
+.bar > i { position: absolute; inset: 0 auto 0 0; background: var(--sig-1); border-right: 2px solid var(--black); }
+.bar > i.l2 { background: var(--sig-2); }
+.bar > i.l3 { background: var(--sig-3); }
+.bar > i.l4 { background: var(--sig-4); }
+.bar > i.l5 { background: var(--sig-5); }
+.bar > i.zero { border-right: none; }
+.bar > b { /* 熔断线等标记 */
+  position: absolute; top: -6px; bottom: -6px; width: 0;
+  border-left: 3px solid var(--black);
+}
+.bar > b::after {
+  content: attr(data-label);
+  position: absolute; top: -1.15rem; left: -2px; transform: translateX(-50%);
+  font: 700 0.62rem 'Space Grotesk', sans-serif; letter-spacing: 0.04em; white-space: nowrap; color: var(--text);
+}
+.bar > b.end::after { transform: translateX(-100%); left: 1px; }
+.bar-lg { height: 26px; margin-top: 1.1rem; }
+
+.alert-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; font-weight: 700; }
+
+/* ---------- 大数字 ---------- */
+.big { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
+.big b { font-family: 'Archivo Black', sans-serif; font-size: 2.1rem; line-height: 1; }
+.big span { font-weight: 700; color: var(--text-muted); }
+
+.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); border: 2px solid var(--line); }
+.kv > div { padding: 0.45rem 0.6rem; border-right: 2px solid var(--line); border-bottom: 2px solid var(--line); margin: 0 -2px -2px 0; min-width: 0; }
+.kv dt { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.1em; color: var(--text-muted); text-transform: uppercase; }
+.kv dd { font-weight: 700; font-size: 0.95rem; overflow-wrap: anywhere; }
+
+.note { font-size: 0.8rem; line-height: 1.45; overflow-wrap: anywhere; }
+.note.bad { color: var(--sig-text-5); font-weight: 700; }
+
+/* ---------- 曲线 ---------- */
+.chart { position: relative; border: 2px solid var(--line); padding: 0.4rem 0.5rem 0.3rem; }
+.chart-head { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; color: var(--text-muted); text-transform: uppercase; }
+.chart-head b { color: var(--text); }
+.chart svg { display: block; width: 100%; height: 64px; overflow: visible; }
+.spark { display: block; overflow: visible; }
+.spark path, .chart path.line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.chart path.area { stroke: none; opacity: 0.18; }
+.chart line.grid { stroke: var(--grid-line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.chart line.cursor { stroke: var(--black); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.chart-tip {
+  position: fixed; z-index: 350; pointer-events: none;
+  padding: 0.3rem 0.5rem;
+  background: var(--black); color: var(--white);
+  border: 2px solid var(--black); box-shadow: 3px 3px 0 var(--accent);
+  font: 700 0.72rem 'Space Grotesk', sans-serif; white-space: nowrap;
+}
+
+/* ---------- 优选 IP 榜单 ---------- */
+.top { width: 100%; border-collapse: collapse; font-size: 0.78rem; font-variant-numeric: tabular-nums; }
+.top th, .top td { padding: 0.28rem 0.45rem; border-bottom: 2px solid var(--line); text-align: right; white-space: nowrap; }
+.top th { font-size: 0.62rem; letter-spacing: 0.1em; color: var(--text-muted); text-transform: uppercase; }
+.top th:first-child, .top td:first-child, .top th:nth-child(2), .top td:nth-child(2) { text-align: left; }
+.top tr.pick td { background: color-mix(in srgb, var(--accent) 35%, transparent); font-weight: 700; }
+.top tr.old td { color: var(--text-muted); }
+.top .mark { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.06em; }
+
+/* ---------- traffic-bot 原文（TG 消息同款排版） ---------- */
+details.raw { border-top: 2px solid var(--line); padding-top: 0.5rem; }
+details.raw summary { cursor: pointer; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; color: var(--text-muted); text-transform: uppercase; }
+.tg { margin-top: 0.5rem; white-space: pre-wrap; font-size: 0.8rem; line-height: 1.5; overflow-wrap: anywhere; }
+.tg blockquote { border-left: 4px solid var(--accent); padding: 0.15rem 0 0.15rem 0.6rem; margin: 0.2rem 0; background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.tg code, .tg pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.92em; }
+.tg pre { overflow-x: auto; }
+
+/* ---------- 空状态 / 加载 ---------- */
+.empty { text-align: center; padding: 3.5rem 2rem; border: 4px dashed var(--black); background: var(--card-bg); }
+.empty h2 { font-size: 1.3rem; margin-bottom: 0.4rem; }
+.empty p { color: var(--text-muted); line-height: 1.6; }
+.empty code { font-family: ui-monospace, Menlo, Consolas, monospace; background: var(--bg); padding: 0 0.3rem; }
+
+.loading { display: flex; justify-content: center; padding: 4rem 2rem; }
+.loading-panel {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.9rem 1.25rem;
+  background: var(--white); border: 3px solid var(--black); box-shadow: 4px 4px 0 var(--shadow);
+  font: 700 0.8rem 'Space Grotesk', sans-serif; letter-spacing: 0.15em;
+}
+.pixel-loader { display: inline-flex; gap: 3px; }
+.pixel-loader i { width: 8px; height: 8px; background: var(--black); animation: pix 0.9s steps(1) infinite; }
+.pixel-loader i:nth-child(2) { animation-delay: 0.15s; }
+.pixel-loader i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes pix { 0%, 100% { background: var(--black); } 50% { background: var(--accent); } }
+
+.banner {
+  margin-bottom: 1.25rem; padding: 0.6rem 0.9rem;
+  border: 3px solid var(--black); background: var(--accent-red); color: #fff;
+  font-weight: 700; font-size: 0.85rem; box-shadow: 4px 4px 0 var(--shadow);
+}
+
+/* ---------- 配色菜单（同 1999 主题） ---------- */
+.theme-menu {
+  position: fixed; z-index: 300;
+  width: min(380px, calc(100vw - 16px));
+  max-height: calc(100vh - 96px); overflow-y: auto;
+  padding: 0.75rem;
+  background: var(--white); color: var(--black);
+  border: 3px solid var(--black); box-shadow: 6px 6px 0 var(--shadow);
+}
+.theme-menu-head { font-family: 'Archivo Black', sans-serif; font-size: 0.85rem; padding-bottom: 0.5rem; margin-bottom: 0.5rem; border-bottom: 2px solid var(--line); }
+.theme-menu-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.theme-menu-label { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.25rem; }
+.theme-item {
+  display: flex; align-items: center; gap: 0.5rem;
+  width: 100%; padding: 0.3rem 0.4rem; margin-bottom: 2px;
+  background: transparent; border: 2px solid transparent;
+  font: 700 0.72rem 'Space Grotesk', sans-serif; letter-spacing: 0.04em; text-transform: uppercase;
+  text-align: left; cursor: pointer;
+}
+.theme-item:hover, .theme-item:focus-visible { border-color: var(--black); background: var(--bg); outline: none; }
+.theme-item[aria-checked="true"] { border-color: var(--black); background: var(--accent); color: var(--on-accent); }
+.swatch { display: inline-grid; grid-template-columns: 1fr 1fr; width: 18px; height: 18px; border: 2px solid var(--black); flex-shrink: 0; }
+.swatch i:first-child { background: var(--sw-paper); }
+.swatch i:last-child { background: var(--sw-accent); }
+
+/* ---------- 页脚 ---------- */
+.footer {
+  background: var(--black); color: var(--white);
+  border-top: var(--border-width) solid var(--black);
+  padding: 1rem 1.5rem;
+  margin-top: 1rem;
+}
+.footer-content {
+  max-width: 1400px; margin: 0 auto;
+  display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+  font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em;
+}
+.footer a { color: var(--accent); text-decoration: none; }
+
+/* ---------- 窄屏 ---------- */
+@media (max-width: 640px) {
+  .header-content { padding: 0.6rem 1rem; }
+  .logo h1 { font-size: 1.15rem; }
+  .stat-item { padding: 0.5rem 0.4rem; min-width: 0; }
+  .stat-value { font-size: 1.15rem; }
+  .stat-label { font-size: 0.6rem; letter-spacing: 0.04em; }
+  .main { padding: 1rem; }
+  .grid, .grid-wide { grid-template-columns: 1fr; gap: 1.1rem; }
+  .sec-head h2 { font-size: 1.15rem; }
+  .theme-menu-cols { grid-template-columns: 1fr; }
+  .big b { font-size: 1.7rem; }
+}

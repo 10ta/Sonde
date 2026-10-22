@@ -1,0 +1,21 @@
+name = "sonde"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# 不使用 cron：历史数据在写入时顺带清理，不占账户的免费 cron 名额
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sonde"
+migrations_dir = "migrations"
+database_id = "REPLACE_WITH_YOUR_D1_ID"
+
+[vars]
+# 历史曲线保留几天
+HISTORY_DAYS = "7"
+
+# 用 `npx wrangler secret put INGEST_TOKEN` 设置（init.sh 会自动生成并设置），不要写进仓库：
+#   INGEST_TOKEN   各工具上报时带的密钥
+
+[observability]
+enabled = true

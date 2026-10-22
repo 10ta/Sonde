@@ -1,0 +1,5 @@
+node_modules/
+.wrangler/
+.dev.vars
+# init.sh 保存的部署配置（含上报密钥）
+.sonde.env

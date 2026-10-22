@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sonde · 探针</title>
+  <meta name="description" content="traffic-bot、cdt-guard、cfst-ddns 上报的用量、熔断与优选 IP 状态">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23000'/%3E%3Crect x='3' y='3' width='10' height='10' fill='%23FFE600'/%3E%3C/svg%3E">
+  <script>
+    // 先套用上次的配色，避免深色主题闪白
+    try { var s = localStorage.getItem('sonde.scheme'); if (s) document.documentElement.dataset.scheme = s; } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="app.css">
+  <script src="config.js"></script>
+</head>
+<body>
+  <header class="header">
+    <div class="header-content">
+      <a class="logo" href="./" aria-label="Sonde 首页">
+        <span class="logo-mark" aria-hidden="true"></span>
+        <h1>Sonde</h1>
+      </a>
+      <div class="header-controls">
+        <button class="btn-square" id="btn-refresh" type="button" title="立即刷新" aria-label="立即刷新">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg>
+        </button>
+        <button class="btn-square" id="btn-theme" type="button" title="配色" aria-label="配色" aria-haspopup="true" aria-expanded="false">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="3" y="3" width="8" height="8"/><rect x="13" y="3" width="8" height="8"/><rect x="3" y="13" width="8" height="8"/><rect x="13" y="13" width="8" height="8" fill="currentColor"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="stats-bar">
+      <div class="stat-item"><span class="stat-value" id="st-online">–</span><span class="stat-label">在线</span></div>
+      <div class="stat-item"><span class="stat-value" id="st-offline">–</span><span class="stat-label">离线</span></div>
+      <div class="stat-item"><span class="stat-value" id="st-hot">–</span><span class="stat-label">越线</span></div>
+      <div class="stat-item"><span class="stat-value" id="st-last">–</span><span class="stat-label">最近上报</span></div>
+    </div>
+  </header>
+
+  <main class="main" id="main">
+    <div class="loading"><div class="loading-panel"><span class="pixel-loader"><i></i><i></i><i></i></span>LOADING</div></div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-content">
+      <span>SONDE · 每 30 秒刷新 · <span id="ft-updated">–</span></span>
+      <span>主题 <a href="https://github.com/10ta/komari-theme-1999-fork" target="_blank" rel="noopener">komari-theme-1999-fork</a> · <a href="https://github.com/10ta/Sonde" target="_blank" rel="noopener">GitHub</a></span>
+    </div>
+  </footer>
+
+  <div class="theme-menu" id="theme-menu" role="menu" hidden></div>
+  <div class="chart-tip" id="chart-tip" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>
