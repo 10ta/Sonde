@@ -137,6 +137,7 @@ button { font: inherit; color: inherit; }
 .badge.info { background: var(--accent-blue); color: #fff; }
 .badge.ink  { background: var(--black); color: var(--white); }
 .badge.off  { background: repeating-linear-gradient(-45deg, var(--card-bg) 0 4px, var(--hatch) 4px 6px); }
+.badge.age  { background: var(--card-bg); color: var(--text); border-color: var(--line); text-transform: none; }
 
 /* ---------- 额度条：第一行 名称 · 用量 · 百分比，第二行 条 + 7 天小曲线 ---------- */
 .metric { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 0.2rem 0.6rem; align-items: baseline; }
@@ -147,14 +148,18 @@ button { font: inherit; color: inherit; }
 .metric-pct.l5 { color: var(--sig-text-5); text-decoration: underline 3px; text-underline-offset: 3px; }
 .metric-bar { grid-column: 1 / -1; display: flex; align-items: center; gap: 0.5rem; }
 .metric-bar .bar { flex: 1; }
-.metric-bar .spark { flex: 0 0 64px; height: 18px; }
+.metric-bar .spark-box { flex: 0 0 64px; height: 18px; border-bottom: 2px solid var(--line); cursor: help; }
+.metric-bar .spark { display: block; width: 64px; height: 16px; }
 
 .bar {
   position: relative;
   height: 14px;
   border: 2px solid var(--black);
-  background: repeating-linear-gradient(90deg, transparent 0 calc(10% - 2px), var(--line) calc(10% - 2px) 10%);
 }
+/* 刻度：10 个格子，每格右边一条 2px 的边框。边框按整像素画，页面缩放时每条一样粗（渐变画的线会有粗有细） */
+.bar > .ticks { position: absolute; inset: 0; display: flex; }
+.bar > .ticks > u { flex: 1; border-right: 2px solid var(--line); text-decoration: none; }
+.bar > .ticks > u:last-child { border-right: none; }
 .bar > i { position: absolute; inset: 0 auto 0 0; background: var(--sig-1); border-right: 2px solid var(--black); }
 .bar > i.l2 { background: var(--sig-2); }
 .bar > i.l3 { background: var(--sig-3); }
@@ -235,13 +240,13 @@ button { font: inherit; color: inherit; }
 .top tr.old td { color: var(--text-muted); }
 .top .mark { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.04em; }
 .top th.cap { text-align: right; text-transform: none; letter-spacing: 0.04em; }
-.top tr.pad td { color: var(--text-muted); }
+.top tr.pad td { color: var(--text-muted); text-align: left; border-bottom-color: transparent; font-size: 0.7rem; }
 
 /* ---------- traffic-bot 原文（TG 消息同款排版） ---------- */
 details.raw { border-top: 2px solid var(--line); padding-top: 0.35rem; }
 details.raw summary { cursor: pointer; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; color: var(--text-muted); text-transform: uppercase; }
 .tg { margin-top: 0.5rem; white-space: pre-wrap; font-size: 0.8rem; line-height: 1.5; overflow-wrap: anywhere; }
-.tg blockquote { border-left: 4px solid var(--accent); padding: 0.15rem 0 0.15rem 0.6rem; margin: 0.2rem 0; background: color-mix(in srgb, var(--accent) 8%, transparent); }
+
 .tg code, .tg pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.92em; }
 .tg pre { overflow-x: auto; }
 
@@ -348,5 +353,3 @@ details.raw summary { cursor: pointer; font-size: 0.72rem; font-weight: 700; let
 }
 .badge.keep-case { text-transform: none; }
 
-/* 报告里的 emoji 一律按彩色 emoji 显示（支持 font-variant-emoji 的浏览器；不支持的靠 app.js 补的 U+FE0F） */
-.tg, .line, .alert-row { font-variant-emoji: emoji; }

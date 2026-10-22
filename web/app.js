@@ -77,12 +77,18 @@
     }).join('');
   }
 
-  // 额度行右侧的小曲线（0–100%）
+  // 额度行右侧的「近 7 天走势」小图：纵轴从 0 到 max(最高值, 10%)，用量很低的不会被放大成大起伏。数据不够（少于 6 个小时）或这几天几乎没变化（波动不到 1 个百分点）时不画：
+  // 一条贴着底的平线什么也说明不了，只会让每张卡看起来一样
   function spark(pts, color) {
-    if (!pts || pts.length < 2) return '<svg class="spark" width="96" height="22" aria-hidden="true"></svg>';
+    if (!pts || pts.length < 6) return '';
+    const vs = pts.map(([, v]) => clamp(v, 0, 100));
+    const lo = Math.min(...vs), hi = Math.max(...vs);
+    if (hi - lo < 1) return '';
     const x0 = pts[0][0], x1 = pts[pts.length - 1][0];
-    return `<svg class="spark" width="96" height="22" viewBox="0 0 96 22" preserveAspectRatio="none" aria-hidden="true">
-      <path d="${pathOf(pts.map(([t, v]) => [t, clamp(v, 0, 100)]), 96, 22, 0, 100, x0, x1)}" style="stroke:${color}"/></svg>`;
+    const days = Math.max(1, Math.round((x1 - x0) / 86400));
+    return `<span class="spark-box" title="近 ${days} 天走势：${num(lo, 1)}% → ${num(vs[vs.length - 1], 1)}%（最高 ${num(hi, 1)}%）">
+      <svg class="spark" viewBox="0 0 64 18" preserveAspectRatio="none" aria-hidden="true">
+      <path d="${pathOf(pts.map(([t], i) => [t, vs[i]]), 64, 18, 0, Math.max(hi, 10), x0, x1)}" style="stroke:${color}"/></svg></span>`;
   }
 
   // 近 7 天曲线，悬停看每个小时的值（紧凑版：一行标题 + 44px 高的曲线，固定高度）
@@ -136,12 +142,12 @@
   // ---------- 通用片段 ----------
   const bar = (pct, marks = [], cls = '') => {
     const p = clamp(pct, 0, 100);
-    return `<div class="bar ${cls}"><i class="l${level(pct)}${p <= 0 ? ' zero' : ''}" style="width:${p}%"></i>${
+    return `<div class="bar ${cls}"><span class="ticks"><u></u><u></u><u></u><u></u><u></u><u></u><u></u><u></u><u></u><u></u></span><i class="l${level(pct)}${p <= 0 ? ' zero' : ''}" style="width:${p}%"></i>${
       marks.map(([at, label]) => `<b class="${at > 80 ? 'end' : ''}" style="left:${clamp(at, 0, 100)}%" data-label="${esc(label)}"></b>`).join('')}</div>`;
   };
   const ageBadge = (src) => (isOffline(src)
     ? `<span class="badge bad" title="最后上报 ${esc(fullTime(src.ts))}，应每 ${Math.round(src.interval / 60)} 分钟一次">离线 · ${esc(ago(src.ts))}</span>`
-    : `<span class="badge off" title="${esc(fullTime(src.ts))}">${esc(ago(src.ts))}</span>`);
+    : `<span class="badge age" title="上报于 ${esc(fullTime(src.ts))}">${esc(ago(src.ts))}</span>`);
   const card = (src, title, badges, body, foot = '', { age = true, cls = '' } = {}) => `
     <article class="card ${cls}${isOffline(src) ? ' offline' : ''}">
       <div class="card-head"><h3>${title}</h3>${badges}${age ? ageBadge(src) : ''}</div>
@@ -162,8 +168,8 @@
     const first = h.match(/^<b>[^\n]*?<\/b>(?:\s*<i>([^\n]*?)<\/i>)?[^\n]*\n?/);
     if (first) { sub = first[1] || ''; h = h.slice(first[0].length); }
     h = h.replace(/^[^\n]*[▰▱][^\n]*\n└ <code>[^\n]*(\n|$)/gm, '')
-      .replace(/<blockquote>\s*<\/blockquote>\n?/g, '')
-      .replace(/<blockquote>\s+/g, '<blockquote>').replace(/\s+<\/blockquote>/g, '</blockquote>')
+      .replace(/<\/?blockquote>/g, '\n')        // TG 的引用块在卡片里不用：说明行统一一种样式
+      .replace(/\n{2,}/g, '\n')
       .replace(/^\s+|\s+$/g, '');
     return { sub: tgHtml(sub), body: h ? tgHtml(h) : '' };
   }
@@ -286,11 +292,11 @@
       ${rows.map((r, i) => (r ? `<tr class="${r.mark}"><td>${i + 1}</td><td>${esc(r.colo)}</td><td>${num(r.lat, 0)}</td>
         <td>${d.metric ? num(r.speed, 2) : num(r.loss, 2)}</td><td>${esc(r.group)}</td><td>${esc(r.src)}</td>
         <td class="mark">${r.mark === 'pick' ? '◀ 选用' : r.mark === 'old' ? '原' : ''}</td></tr>`
-        : `<tr class="pad"><td>${i + 1}</td><td>–</td><td></td><td></td><td></td><td></td><td></td></tr>`)).join('')}
+        : `<tr class="pad"><td colspan="7">${i === 0 ? '榜单在下一次复测榜单 / 全量扫描后出现（巡检只测当前 IP）' : ''}</td></tr>`)).join('')}
       </tbody></table>`;
     const body = hero
       + line(failed ? '⚠️' : '💡', failed ? d.reason : d.why, failed ? 'bad' : '')
-      + line('🆚', d.compare, 'muted')
+      + line('🆚', d.compare || (d.kind === 'failed' ? '' : '官方 / 种子对比在下一次复测榜单或全量扫描后更新'), 'muted')
       + top
       + charts2(d.metric ? chart(hist.speed, { label: `${d.metric} MB/s`, color: 'var(--accent-green)', min: 0, digits: 2 })
                          : chart(hist.loss, { label: '丢包', color: 'var(--accent-green)', min: 0, digits: 2 }),
