@@ -8,7 +8,7 @@ compatibility_date = "2026-10-01"
 binding = "DB"
 database_name = "sonde"
 migrations_dir = "migrations"
-database_id = "REPLACE_WITH_YOUR_D1_ID"
+database_id = "a5f387b5-6fbb-43ec-9785-4ff5f0164b3f"
 
 [vars]
 # 历史曲线保留几天
