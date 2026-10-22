@@ -76,7 +76,7 @@
     if (!pts || pts.length < 2) return '<svg class="spark" width="96" height="22" aria-hidden="true"></svg>';
     const x0 = pts[0][0], x1 = pts[pts.length - 1][0];
     return `<svg class="spark" width="96" height="22" viewBox="0 0 96 22" preserveAspectRatio="none" aria-hidden="true">
-      <path d="${pathOf(pts, 96, 22, 0, 100, x0, x1)}" style="stroke:${color}"/></svg>`;
+      <path d="${pathOf(pts.map(([t, v]) => [t, clamp(v, 0, 100)]), 96, 22, 0, 100, x0, x1)}" style="stroke:${color}"/></svg>`;
   }
 
   // 近 7 天曲线，悬停看每个小时的值（紧凑版：一行标题 + 44px 高的曲线，固定高度）
@@ -161,44 +161,58 @@
       .replace(/^\s+|\s+$/g, '');
     return { sub: tgHtml(sub), body: h ? tgHtml(h) : '' };
   }
-  function trafficCards(src, hist, hideAliyun) {
-    const providers = (src.data?.providers || [])
-      .filter((p) => !p.empty)
-      .filter((p) => !(hideAliyun && p.name === 'Aliyun CDT'));
-    const html = (p) => {
-      const [group, part] = p.group ? [p.group, p.name.split(' · ').slice(1).join(' · ')] : ['', p.name];
-      const strip = new RegExp(`^(${[group, part, p.name].filter(Boolean).map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\s*`, 'i');
+  // 卡片标题统一为「厂商 · 名称」两层：Cloudflare · D1、AWS · CloudFront、AlibabaCloud · CDT…
+  // 新版 bot 直接给 group / name；兼容老版（name 是「Cloudflare · D1」或「AWS 账单」这种）
+  const LEGACY = { BWH: ['BandwagonHost', 'VPS'], Lightsail: ['AWS', 'Lightsail'], CloudFront: ['AWS', 'CloudFront'],
+    'AWS 账单': ['AWS', '账单'], 'Oracle Cloud': ['OracleCloud', '用量'], 'Aliyun CDT': ['AlibabaCloud', 'CDT'] };
+  function names(p) {
+    if (p.group && p.name.startsWith(`${p.group} · `)) return [p.group, p.name.slice(p.group.length + 3)];
+    if (p.group) return [p.group, p.name];
+    return LEGACY[p.name] || ['', p.name];
+  }
+  // 指标名去掉和标题重复的厂商前缀：「Cloudflare Workers/Pages 今日请求」→「今日请求」
+  const LABEL_PREFIX = /^(BWH|CloudFront|AWS|Oracle|Cloudflare|Lightsail|阿里云 CDT|阿里云|D1|R2|Workers\/Pages)\s+/;
+  const shortLabel = (l) => { let x = l; for (let i = 0; i < 3; i++) x = x.replace(LABEL_PREFIX, ''); return x || l; };
+  const tbTitle = (group, name, sub) =>
+    `${group ? `<span class="grp">${esc(group)}</span>` : ''}${esc(name)}${sub ? `<span class="sub">${sub}</span>` : ''}`;
+  const metricRow = (label, detail, pct, spk, marks = []) => `<div class="metric">
+      <span class="metric-label" title="${esc(label)}">${esc(label)}</span>
+      <span class="metric-detail num">${esc(detail)}</span>
+      <span class="metric-pct num${pct >= 95 ? ' l5' : pct >= 80 ? ' l4' : ''}">${num(pct, 1)}%</span>
+      <div class="metric-bar">${bar(pct, marks)}${spark(spk, `var(--sig-${level(pct)})`)}</div>
+    </div>`;
+
+  // traffic-bot：每个来源一张卡 → [{ group, html }]
+  function trafficItems(src, hist, hideAliyun) {
+    return (src.data?.providers || []).filter((p) => !p.empty).map((p) => {
+      const [group, name] = names(p);
+      if (hideAliyun && group === 'AlibabaCloud') return null;   // 有 cdt-guard 自己的卡片时以它为准
       // 账号总量在前，单个数据库 / 实例的在后
       const ms = [...(p.metrics || [])].sort((a, b) => (/:d1_db:|:db:/.test(a.key) ? 1 : 0) - (/:d1_db:|:db:/.test(b.key) ? 1 : 0));
-      const rows = ms.map((m) => {
-        if (m.alert) return m.pct > 0 ? `<div class="alert-row"><span class="badge warn">提醒</span>${esc(m.label)}</div>` : '';
-        const lv = level(m.pct);
-        return `<div class="metric">
-          <span class="metric-label" title="${esc(m.label)}">${esc(m.label.replace(strip, '').replace(strip, '').replace(/^Workers\/Pages\s*/, '') || m.label)}</span>
-          <span class="metric-detail num">${esc(m.detail)}</span>
-          <span class="metric-pct num${m.pct >= 95 ? ' l5' : m.pct >= 80 ? ' l4' : ''}">${num(m.pct, 1)}%</span>
-          <div class="metric-bar">${bar(m.pct)}${spark(hist[m.key], `var(--sig-${lv})`)}</div>
-        </div>`;
-      }).join('');
+      const rows = ms.map((m) => (m.alert
+        ? (m.pct > 0 ? `<div class="alert-row"><span class="badge warn">提醒</span>${esc(m.label)}</div>` : '')
+        : metricRow(shortLabel(m.label), m.detail, m.pct, hist[m.key]))).join('');
       const rep = reportParts(p.html);
       const body = rows + (rep.body ? `<div class="tg">${rep.body}</div>` : '') || '<p class="line muted">–</p>';
-      const title = `${group ? `<span class="grp">${esc(group)}</span>` : ''}${esc(part)}${rep.sub ? `<span class="sub">${rep.sub}</span>` : ''}`;
-      return card(src, title, p.ok ? '' : '<span class="badge bad">查询失败</span>', body, '', { age: false, cls: 'tb' });
-    };
-    // 拆开的 Cloudflare 几张卡放在一列里连着排；其他来源在旁边按瀑布流排
-    const grouped = providers.filter((p) => p.group).map(html).join('');
-    const rest = providers.filter((p) => !p.group).map(html).join('');
-    if (!grouped) return `<div class="masonry">${rest}</div>`;
-    if (!rest) return `<div class="tb-stack">${grouped}</div>`;
-    return `<div class="tb-layout"><div class="tb-stack">${grouped}</div><div class="masonry">${rest}</div></div>`;
+      return { group, html: card(src, tbTitle(group, name, rep.sub), p.ok ? '' : '<span class="badge bad">查询失败</span>', body, '', { age: false, cls: 'tb' }) };
+    }).filter(Boolean);
   }
 
-  // ---------- cdt-guard ----------
-  function cdtCard(src, hist) {
+  // 重置时间：「10天后重置 (Nov.1 00:00:00)」，和 TG 消息同一种写法
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function resetText(ms, offHours) {   // ms：重置时刻；offHours：按哪个时区显示
+    const h = (ms - Date.now()) / 3600e3;
+    const left = h < 48 ? `${Math.max(0, Math.round(h))}小时` : `${Math.ceil(h / 24)}天`;
+    const d = new Date(ms + offHours * 3600e3);
+    const p2 = (n) => String(n).padStart(2, '0');
+    return `${left}后重置 <i>(${MON[d.getUTCMonth()]}.${d.getUTCDate()} ${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}:${p2(d.getUTCSeconds())})</i>`;
+  }
+
+  // cdt-guard：和 traffic-bot 的卡片同一种样式，放在「额度」里 → { group, html }
+  function cdtItem(src, hist) {
     const d = src.data || {};
     const quota = d.quota_gb || 0, limit = d.limit_gb || 0, used = d.used_gb || 0;
-    const guard = d.cost_locked ? ['bad', '费用熔断'] : d.locked ? ['bad', '流量熔断'] : d.hold ? ['warn', '暂停自启'] : ['ok', '守护中'];
-    const st = d.status === 'Running' ? 'ok' : d.status === 'Stopped' ? 'warn' : 'ink';
+    const [gc, gt] = d.cost_locked ? ['bad', '费用熔断'] : d.locked ? ['bad', '流量熔断'] : d.hold ? ['warn', '暂停自启'] : ['ok', '守护中'];
     // CDT 免费额度按北京时间自然月重置
     const cn = new Date(Date.now() + 8 * 3600e3);
     const reset = Date.UTC(cn.getUTCFullYear(), cn.getUTCMonth() + 1, 1) - 8 * 3600e3;
@@ -207,32 +221,36 @@
     const pct = quota ? (used / quota) * 100 : 0;
     const costPct = d.cost_limit ? ((d.cost || 0) / d.cost_limit) * 100 : 0;
     const regions = Object.entries(d.by_region || {});
-    const problem = d.fail ? `最近 ${d.fail} 次查询阿里云失败：${d.last_error || ''}`
-      : d.cost_error ? `账单查询失败，费用熔断暂时失效：${d.cost_error}` : '';
-    const body = `
-      <div class="hero">
-        <div class="big"><b class="num">${num(used, 1)}</b><span>/ ${num(quota, 0)} GB<br>${num(pct, 1)}%</span></div>
-        ${stats([
-          ['距熔断', `<span class="num">${num(toLimit, 1)} GB</span>`],
-          ['日均可用', `<span class="num">${num(toLimit / daysLeft, 1)} GB</span>`],
-          ['速率', `<span class="num">${num(d.rate_gbh, 2)} GB/h</span>`],
-          ['重置', `${daysLeft} 天后`],
-        ])}
-      </div>
-      ${bar(pct, limit && quota ? [[(limit / quota) * 100, `熔断 ${num(limit, 0)}`]] : [], 'bar-lg')}
-      ${d.cost_limit ? `<div class="metric">
-          <span class="metric-label">本月费用</span>
-          <span class="metric-detail num">${num(d.cost, 2)} / ${num(d.cost_limit, 0)} ${esc(d.currency || '')}</span>
-          <span class="metric-pct num">${num(costPct, 0)}%</span>
-          <div class="metric-bar">${bar(costPct)}${spark(hist.cost && hist.cost.map(([t, v]) => [t, d.cost_limit ? (v / d.cost_limit) * 100 : 0]), `var(--sig-${level(costPct)})`)}</div>
-        </div>` : ''}
-      ${line(problem ? '⚠️' : '🗺', problem || (regions.length ? regions.map(([r, g]) => `${r} ${num(g, 1)} GB`).join(' · ') : '–'), problem ? 'bad' : 'muted')}
-      ${charts2(chart(hist.used_gb, { label: '已用 GB', color: 'var(--accent-blue)', min: 0 }),
-                chart(hist.rate_gbh, { label: '速率 GB/h', color: 'var(--accent-purple)', min: 0, digits: 2 }))}`;
-    const badges = `<span class="badge ${guard[0]}">${guard[1]}</span><span class="badge ${st}">${esc(d.status || '?')}</span>`;
-    const pool = d.cls === 'international' ? '海外 / 香港' : '中国内地';
-    return card(src, `🟧 ${esc(d.name || 'Aliyun CDT')}`, badges, body,
-      `<span>CDT · ${pool}</span><span>熔断方式：${d.mode === 'sg' ? '安全组封禁' : '关机'}</span>`);
+    const gb = (v) => `${num(v, v < 100 ? 1 : 0)}GB`;
+    const rows = metricRow('流量', `${num(used, 1)} / ${num(quota, 0)}GB`, pct,
+      hist.used_gb && quota ? hist.used_gb.map(([t, v]) => [t, (v / quota) * 100]) : null,
+      limit && quota ? [[(limit / quota) * 100, '']] : [])
+      + (d.cost_limit ? metricRow('本月费用', `${num(d.cost, 2)} / ${num(d.cost_limit, 0)} ${d.currency || ''}`, costPct,
+        hist.cost ? hist.cost.map(([t, v]) => [t, (v / d.cost_limit) * 100]) : null) : '');
+    const lines = [
+      `🛡 熔断线 <b>${esc(gb(limit))}</b>（${d.mode === 'sg' ? '安全组封禁' : '关机'}）· 距熔断 <b>${esc(gb(toLimit))}</b>`,
+      `🖥 <b>${esc(d.name || 'ECS')}</b> · ${esc(d.status || '?')} · 速率 ${esc(num(d.rate_gbh, 2))}GB/h`,
+      regions.length > 1 ? `🗺 ${regions.map(([r, g]) => `${esc(r)} ${esc(gb(g))}`).join(' · ')}` : '',
+      `🔄 ${resetText(reset, 8)} · 日均可用 <b>${esc(gb(toLimit / daysLeft))}</b>`,
+      d.fail ? `⚠️ <b>最近 ${esc(d.fail)} 次查询阿里云失败</b>：${esc(d.last_error || '')}` : '',
+      d.cost_error ? `⚠️ <b>账单查询失败，费用熔断暂时失效</b>：${esc(d.cost_error)}` : '',
+    ].filter(Boolean).join('\n');
+    const pool = d.cls === 'international' ? '本月 · 海外/香港' : '本月 · 中国内地';
+    const badges = `<span class="badge ${gc} keep-case">cdt-guard ${gt}</span>`;
+    return { group: 'AlibabaCloud', html: card(src, tbTitle('AlibabaCloud', 'CDT', esc(pool)), badges, `${rows}<div class="tg">${lines}</div>`, '', { cls: 'tb' }) };
+  }
+
+  // 额度区排版：卡片最多的那个厂商（比如 Cloudflare 拆成的几张）连着排一列，其他卡片在旁边按瀑布流排
+  function quotaLayout(items) {
+    const count = {};
+    for (const it of items) if (it.group) count[it.group] = (count[it.group] || 0) + 1;
+    const [big] = Object.entries(count).sort((a, b) => b[1] - a[1])[0] || [];
+    const stackGroup = big && count[big] >= 3 ? big : null;
+    const stack = items.filter((it) => it.group === stackGroup).map((it) => it.html).join('');
+    const rest = items.filter((it) => it.group !== stackGroup).map((it) => it.html).join('');
+    if (!stack) return `<div class="masonry">${rest}</div>`;
+    if (!rest) return `<div class="tb-stack">${stack}</div>`;
+    return `<div class="tb-layout"><div class="tb-stack">${stack}</div><div class="masonry">${rest}</div></div>`;
   }
 
   // ---------- cfst-ddns：每个目标一张卡，行数固定 ----------
@@ -362,9 +380,9 @@
     $('#st-last').textContent = sources.length ? ago(Math.max(...sources.map((s) => s.ts))).replace(' 前', '').replace('前', '') : '–';
 
     let html = state.error ? `<div class="banner">刷新失败：${esc(state.error)}（显示的是上次的数据）</div>` : '';
-    html += section('额度', 'traffic-bot · 各云的免费额度与账单', tb.map((s) => trafficCards(s, hist(s.source), cdt.length > 0)).join(''),
+    const quotaItems = [...tb.flatMap((s) => trafficItems(s, hist(s.source), cdt.length > 0)), ...cdt.map((s) => cdtItem(s, hist(s.source)))];
+    html += section('额度', 'traffic-bot · cdt-guard · 各云的免费额度、账单与熔断', quotaItems.length ? quotaLayout(quotaItems) : '',
       'raw', tb[0] ? ageBadge(tb[0]) : '');
-    html += section('阿里云 CDT', 'cdt-guard · 流量熔断与费用熔断', cdt.map((s) => cdtCard(s, hist(s.source))).join(''), 'wide');
     html += section('优选 IP', 'cfst-ddns · 当前解析的节点与测速', cfst.map((s) => cfstCard(s, hist(s.source))).join(''), 'wide');
     html += section('其他', '未识别的来源', other.map((s) => card(s, esc(s.source), '', `<pre class="tg">${esc(JSON.stringify(s.data, null, 2))}</pre>`)).join(''));
     if (!sources.length) {
@@ -382,6 +400,8 @@
     const box = document.querySelector('.tb-layout');
     if (!box) return;
     const stack = box.querySelector('.tb-stack'), mas = box.querySelector('.masonry');
+    // 上次挪到左边的卡片先放回右边（窗口大小变了要重新排）
+    [...stack.querySelectorAll('[data-moved]')].reverse().forEach((c) => { delete c.dataset.moved; mas.appendChild(c); });
     const apply = (k) => {
       box.style.gridTemplateColumns = `minmax(290px, 1fr) minmax(0, ${k}fr)`;
       mas.style.columnCount = k;
@@ -393,7 +413,17 @@
     const hCf = stack.offsetHeight;
     const hOther = [...mas.children].reduce((a, c) => a + c.offsetHeight + gap, 0);
     const k = Math.max(1, Math.min(maxCols - 1, Math.round(hOther / Math.max(hCf, 1))));
-    if (k !== 1) apply(k);
+    if (k !== 1) { apply(k); return; }
+    // 只有左右两列时：右边明显更高，就把右边最下面的卡片挪到左边最下面，直到再挪会让高的那一列更高为止
+    for (let i = 0; i < 6 && mas.children.length > 1; i++) {
+      const last = mas.lastElementChild;
+      const h = last.offsetHeight + gap;
+      const before = Math.max(stack.offsetHeight, mas.offsetHeight);
+      const after = Math.max(stack.offsetHeight + h, mas.offsetHeight - h);
+      if (after >= before) break;
+      last.dataset.moved = '1';
+      stack.appendChild(last);
+    }
   }
   let resizeTimer = 0;
   window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(layoutTraffic, 150); });

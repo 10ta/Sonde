@@ -346,3 +346,4 @@ details.raw summary { cursor: pointer; font-size: 0.72rem; font-weight: 700; let
   .masonry { columns: 1 !important; }
   .masonry > .card { margin-bottom: 1.1rem; }
 }
+.badge.keep-case { text-transform: none; }
