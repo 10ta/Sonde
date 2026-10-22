@@ -321,3 +321,23 @@ details.raw summary { cursor: pointer; font-size: 0.72rem; font-weight: 700; let
   .big b { font-size: 1.6rem; }
   .badge { padding: 0 0.3rem; letter-spacing: 0.02em; }
 }
+
+/* ---------- 额度：Cloudflare 的几张卡占一列，其他来源在右边排 k 列（瀑布流） ----------
+   k 由 app.js 按卡片实际高度算出来，让左右尽量一样高；窄于 760px：全部单列 */
+.tb-layout { display: grid; grid-template-columns: minmax(290px, 1fr) minmax(0, 1fr); gap: 1.25rem; align-items: start; }
+.tb-stack { display: flex; flex-direction: column; gap: 1.25rem; min-width: 0; }
+.masonry { columns: 290px; column-gap: 1.25rem; }
+.tb-layout .masonry { columns: 1; }
+.masonry > .card { break-inside: avoid; margin-bottom: 1.25rem; width: 100%; }
+.masonry > .card:last-child { margin-bottom: 0; }
+.card.tb h3 { display: flex; align-items: baseline; gap: 0.4rem; min-width: 0; }
+.card.tb h3 .grp { font: 700 0.62rem 'Space Grotesk', sans-serif; letter-spacing: 0.08em; padding: 0.05rem 0.3rem; background: var(--black); color: var(--white); align-self: center; flex-shrink: 0; }
+.card.tb h3 .sub { font: 700 0.68rem 'Space Grotesk', sans-serif; letter-spacing: 0.02em; text-transform: none; color: var(--text-muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.card.tb h3 .sub i { font-style: normal; }
+.card.tb .tg { margin-top: 0; font-size: 0.75rem; line-height: 1.5; }
+.card.tb .metric + .tg { border-top: 2px solid var(--line); padding-top: 0.45rem; }
+@media (max-width: 760px) {
+  .tb-layout { grid-template-columns: 1fr !important; }
+  .masonry { columns: 1 !important; }
+  .masonry > .card { margin-bottom: 1.1rem; }
+}

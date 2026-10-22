@@ -147,24 +147,50 @@
   // 2 × 2 的数字格
   const stats = (pairs) => `<dl class="stats">${pairs.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`).join('')}</dl>`;
 
-  // ---------- traffic-bot：每个来源一张卡 ----------
+  // ---------- traffic-bot：每个来源一张卡（Cloudflare 按 CDN / D1 / Workers 拆成几张） ----------
+  // 报告原文是 TG 消息的排版。额度那几行（▰▱ 进度条 + 「└ 用量 / 总量」）已经画成了上面的条，这里去掉；
+  // 第一行标题拿来当卡片副标题；其余（重置时间、日均可用、每个数据库、每个站点…）全部照原样显示
+  function reportParts(html) {
+    let h = String(html || '');
+    let sub = '';
+    const first = h.match(/^<b>[^\n]*?<\/b>(?:\s*<i>([^\n]*?)<\/i>)?[^\n]*\n?/);
+    if (first) { sub = first[1] || ''; h = h.slice(first[0].length); }
+    h = h.replace(/^[^\n]*[▰▱][^\n]*\n└ <code>[^\n]*(\n|$)/gm, '')
+      .replace(/<blockquote>\s*<\/blockquote>\n?/g, '')
+      .replace(/<blockquote>\s+/g, '<blockquote>').replace(/\s+<\/blockquote>/g, '</blockquote>')
+      .replace(/^\s+|\s+$/g, '');
+    return { sub: tgHtml(sub), body: h ? tgHtml(h) : '' };
+  }
   function trafficCards(src, hist, hideAliyun) {
-    const providers = (src.data?.providers || []).filter((p) => !(hideAliyun && p.name === 'Aliyun CDT'));
-    return providers.map((p) => {
-      const rows = (p.metrics || []).map((m) => {
+    const providers = (src.data?.providers || [])
+      .filter((p) => !p.empty)
+      .filter((p) => !(hideAliyun && p.name === 'Aliyun CDT'));
+    const html = (p) => {
+      const [group, part] = p.group ? [p.group, p.name.split(' · ').slice(1).join(' · ')] : ['', p.name];
+      const strip = new RegExp(`^(${[group, part, p.name].filter(Boolean).map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\s*`, 'i');
+      // 账号总量在前，单个数据库 / 实例的在后
+      const ms = [...(p.metrics || [])].sort((a, b) => (/:d1_db:|:db:/.test(a.key) ? 1 : 0) - (/:d1_db:|:db:/.test(b.key) ? 1 : 0));
+      const rows = ms.map((m) => {
         if (m.alert) return m.pct > 0 ? `<div class="alert-row"><span class="badge warn">提醒</span>${esc(m.label)}</div>` : '';
         const lv = level(m.pct);
         return `<div class="metric">
-          <span class="metric-label" title="${esc(m.label)}">${esc(m.label.replace(new RegExp(`^${p.name}\\s*`, 'i'), '') || m.label)}</span>
+          <span class="metric-label" title="${esc(m.label)}">${esc(m.label.replace(strip, '').replace(strip, '').replace(/^Workers\/Pages\s*/, '') || m.label)}</span>
           <span class="metric-detail num">${esc(m.detail)}</span>
           <span class="metric-pct num${m.pct >= 95 ? ' l5' : m.pct >= 80 ? ' l4' : ''}">${num(m.pct, 1)}%</span>
           <div class="metric-bar">${bar(m.pct)}${spark(hist[m.key], `var(--sig-${lv})`)}</div>
         </div>`;
       }).join('');
-      const body = (rows || '<p class="line muted">这一项没有额度指标</p>')
-        + (p.html ? `<details class="raw"><summary>完整报告</summary><div class="tg">${tgHtml(p.html)}</div></details>` : '');
-      return card(src, esc(p.name), p.ok ? '' : '<span class="badge bad">查询失败</span>', body, '', { age: false });
-    }).join('');
+      const rep = reportParts(p.html);
+      const body = rows + (rep.body ? `<div class="tg">${rep.body}</div>` : '') || '<p class="line muted">–</p>';
+      const title = `${group ? `<span class="grp">${esc(group)}</span>` : ''}${esc(part)}${rep.sub ? `<span class="sub">${rep.sub}</span>` : ''}`;
+      return card(src, title, p.ok ? '' : '<span class="badge bad">查询失败</span>', body, '', { age: false, cls: 'tb' });
+    };
+    // 拆开的 Cloudflare 几张卡放在一列里连着排；其他来源在旁边按瀑布流排
+    const grouped = providers.filter((p) => p.group).map(html).join('');
+    const rest = providers.filter((p) => !p.group).map(html).join('');
+    if (!grouped) return `<div class="masonry">${rest}</div>`;
+    if (!rest) return `<div class="tb-stack">${grouped}</div>`;
+    return `<div class="tb-layout"><div class="tb-stack">${grouped}</div><div class="masonry">${rest}</div></div>`;
   }
 
   // ---------- cdt-guard ----------
@@ -255,10 +281,11 @@
   // ---------- 页面 ----------
   const state = { status: null, history: {}, error: '', loadedAt: 0 };
 
-  function section(title, note, cards, wide = false, extra = '') {
+  function section(title, note, cards, layout = 'grid', extra = '') {
     if (!cards) return '';
+    const cls = layout === 'raw' ? '' : layout === 'wide' ? 'grid grid-wide' : 'grid';
     return `<section class="section"><div class="sec-head"><h2>${title}</h2><span class="sec-note">${note}</span>${extra}</div>
-      <div class="grid${wide ? ' grid-wide' : ''}">${cards}</div></section>`;
+      <div class="${cls}">${cards}</div></section>`;
   }
 
   function render() {
@@ -294,17 +321,40 @@
 
     let html = state.error ? `<div class="banner">刷新失败：${esc(state.error)}（显示的是上次的数据）</div>` : '';
     html += section('额度', 'traffic-bot · 各云的免费额度与账单', tb.map((s) => trafficCards(s, hist(s.source), cdt.length > 0)).join(''),
-      false, tb[0] ? ageBadge(tb[0]) : '');
-    html += section('阿里云 CDT', 'cdt-guard · 流量熔断与费用熔断', cdt.map((s) => cdtCard(s, hist(s.source))).join(''), true);
-    html += section('优选 IP', 'cfst-ddns · 当前解析的节点与测速', cfst.map((s) => cfstCard(s, hist(s.source))).join(''), true);
+      'raw', tb[0] ? ageBadge(tb[0]) : '');
+    html += section('阿里云 CDT', 'cdt-guard · 流量熔断与费用熔断', cdt.map((s) => cdtCard(s, hist(s.source))).join(''), 'wide');
+    html += section('优选 IP', 'cfst-ddns · 当前解析的节点与测速', cfst.map((s) => cfstCard(s, hist(s.source))).join(''), 'wide');
     html += section('其他', '未识别的来源', other.map((s) => card(s, esc(s.source), '', `<pre class="tg">${esc(JSON.stringify(s.data, null, 2))}</pre>`)).join(''));
     if (!sources.length) {
       html = `<div class="empty"><h2>还没有任何上报</h2>
         <p>在 traffic-bot、cdt-guard、cfst-ddns 的配置里填上 <code>SONDE_URL</code> 和 <code>SONDE_TOKEN</code>，<br>它们下一次运行后就会出现在这里。</p></div>`;
     }
     main.innerHTML = html;
+    layoutTraffic();
     $('#ft-updated').textContent = `更新于 ${fullTime(nowSec())}`;
   }
+
+  // 额度区的列数：Cloudflare 一列，其他来源 k 列。按实际高度选 k，让两边尽量一样高、不留大块空白：
+  // 其他来源加起来和 Cloudflare 差不多高 → 1 列（左右各一列）；是它的两倍 → 2 列……；但每列不窄于 290px
+  function layoutTraffic() {
+    const box = document.querySelector('.tb-layout');
+    if (!box) return;
+    const stack = box.querySelector('.tb-stack'), mas = box.querySelector('.masonry');
+    const apply = (k) => {
+      box.style.gridTemplateColumns = `minmax(290px, 1fr) minmax(0, ${k}fr)`;
+      mas.style.columnCount = k;
+    };
+    apply(1);                                                  // 先按 1 列量高度
+    if (window.innerWidth <= 760) return;                      // 窄屏：单列，CSS 处理
+    const maxCols = Math.max(2, Math.floor((box.clientWidth + 20) / 310));
+    const gap = 20;
+    const hCf = stack.offsetHeight;
+    const hOther = [...mas.children].reduce((a, c) => a + c.offsetHeight + gap, 0);
+    const k = Math.max(1, Math.min(maxCols - 1, Math.round(hOther / Math.max(hCf, 1))));
+    if (k !== 1) apply(k);
+  }
+  let resizeTimer = 0;
+  window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(layoutTraffic, 150); });
 
   async function getJSON(path) {
     const r = await fetch(`${API}${path}`, { cache: 'no-store' });
@@ -375,8 +425,8 @@
   load(true);
   setInterval(() => {
     if (document.visibilityState !== 'visible') return;
-    // 展开了「完整报告」时不重绘，免得刚打开就被收起
-    if (document.querySelector('details.raw[open], .line.open')) return;
+    // 点开了某一行全文时不重绘，免得刚展开就被收起
+    if (document.querySelector('.line.open')) return;
     if (Date.now() - state.loadedAt >= STATUS_MS - 1000) load();
   }, 5000);
   document.addEventListener('visibilitychange', () => {
