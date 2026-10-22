@@ -6,9 +6,10 @@
   <title>Sonde · 探针</title>
   <meta name="description" content="traffic-bot、cdt-guard、cfst-ddns 上报的用量、熔断与优选 IP 状态">
   <meta name="robots" content="noindex">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23000'/%3E%3Crect x='3' y='3' width='10' height='10' fill='%23FFE600'/%3E%3C/svg%3E">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <script>
-    // 先套用上次的配色，避免深色主题闪白
+    // 先套用上次的配色（默认蓝色，和 Sabonner 的黄色区分开），避免深色主题闪白
+    document.documentElement.dataset.scheme = 'blue-light';
     try { var s = localStorage.getItem('sonde.scheme'); if (s) document.documentElement.dataset.scheme = s; } catch (e) {}
   </script>
   <link rel="stylesheet" href="theme.css">
@@ -19,7 +20,7 @@
   <header class="header">
     <div class="header-content">
       <a class="logo" href="./" aria-label="Sonde 首页">
-        <span class="logo-mark" aria-hidden="true"></span>
+        <svg class="logo-mark" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><rect width="16" height="16"/><g><rect x="5" y="3" width="7" height="2"/><rect x="4" y="4" width="2" height="3"/><rect x="5" y="7" width="6" height="2"/><rect x="10" y="8" width="2" height="3"/><rect x="4" y="11" width="7" height="2"/></g></svg>
         <h1>Sonde</h1>
       </a>
       <div class="header-controls">

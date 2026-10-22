@@ -24,7 +24,7 @@
     'gruvbox-dark': ['Gruvbox', '#282828', '#fe8019'], 'catppuccin-dark': ['Catppuccin Mocha', '#1e1e2e', '#cba6f7'],
     'psg-dark': ['PSG', '#0e2a4a', '#DA291C'], 'samalive-dark': ['samalive', '#1f333d', '#e0913a'],
   };
-  const DEFAULT_SCHEME = 'yellow-light';
+  const DEFAULT_SCHEME = 'blue-light';   // 和 Sabonner 的黄色区分开
 
   // ---------- 工具 ----------
   const $ = (sel, root = document) => root.querySelector(sel);

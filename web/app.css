@@ -43,11 +43,9 @@ button { font: inherit; color: inherit; }
 }
 .logo { display: flex; align-items: center; gap: 0.75rem; text-decoration: none; color: var(--black); }
 .logo h1 { font-size: 1.5rem; }
-.logo-mark {
-  width: 22px; height: 22px;
-  background: var(--black);
-  box-shadow: inset 0 0 0 5px var(--black), inset 0 0 0 11px var(--white);
-}
+.logo-mark { width: 24px; height: 24px; flex-shrink: 0; }   /* 像素 S，和 favicon 同一个图形 */
+.logo-mark > rect { fill: var(--black); }
+.logo-mark > g { fill: var(--white); }
 .header-controls { display: flex; gap: 0.5rem; }
 
 .btn-square {
