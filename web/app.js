@@ -278,6 +278,47 @@
     return card(src, esc(d.label || src.source.split(':')[1] || 'cfst'), badges, body, foot, { cls: 'cfst' });
   }
 
+  // ---------- 账单汇总（顶部两格） ----------
+  // 来源：traffic-bot 上报的 AWS（CloudWatch 预估账单，按 UTC 自然月）、cdt-guard 的阿里云费用（按北京时间自然月）。
+  // 预计月底 = 已产生 ÷ 本月已过去的比例（线性外推）；月初第一天数据太少，不外推
+  const SYM = { USD: '$', CNY: '¥', EUR: '€', JPY: '¥', HKD: 'HK$' };
+  const TZ_OFF = { UTC: 0, 'Asia/Shanghai': 8 };
+  function monthFraction(tz) {
+    const off = (TZ_OFF[tz] ?? 0) * 3600e3;
+    const local = new Date(Date.now() + off);
+    const start = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), 1) - off;
+    const end = Date.UTC(local.getUTCFullYear(), local.getUTCMonth() + 1, 1) - off;
+    return (Date.now() - start) / (end - start);
+  }
+  function collectBills(sources) {
+    const out = [];
+    for (const s of sources) {
+      if (s.source === 'traffic-bot') for (const b of s.data?.bills || []) out.push(b);
+      if (s.source === 'cdt-guard' && s.data?.cost_limit > 0) {  // 设了费用熔断线才会去查账单
+        out.push({ name: '阿里云', amount: Number(s.data.cost) || 0, currency: s.data.currency || 'USD', tz: 'Asia/Shanghai' });
+      }
+    }
+    return out.filter((b) => Number.isFinite(b.amount));
+  }
+  const money = (byCur) => Object.entries(byCur).map(([c, v]) => `${SYM[c] || `${c} `}${v.toFixed(2)}`).join(' + ') || '–';
+  function renderBills(sources) {
+    const bills = collectBills(sources);
+    const now = {}, proj = {}; let projOk = bills.length > 0;
+    const lines = [];
+    for (const b of bills) {
+      const f = monthFraction(b.tz);
+      now[b.currency] = (now[b.currency] || 0) + b.amount;
+      const p = f >= 1 / 31 ? b.amount / f : null;
+      if (p == null) projOk = false; else proj[b.currency] = (proj[b.currency] || 0) + p;
+      lines.push(`${b.name}：${money({ [b.currency]: b.amount })}，预计 ${p == null ? '–（月初数据太少）' : money({ [b.currency]: p })}`);
+    }
+    $('#st-bill').textContent = bills.length ? money(now) : '–';
+    $('#st-proj').textContent = projOk ? money(proj) : '–';
+    const tipText = bills.length ? `${lines.join('\n')}\n预计按本月已过去的时间线性外推，账单本身有几小时延迟`
+      : '没有账单数据：traffic-bot 需要开启 AWS 账单，cdt-guard 需要设置费用熔断线（COST_LIMIT）';
+    $('#st-bill-box').title = tipText; $('#st-proj-box').title = tipText;
+  }
+
   // ---------- 页面 ----------
   const state = { status: null, history: {}, error: '', loadedAt: 0 };
 
@@ -317,6 +358,7 @@
     $('#st-online').textContent = sources.length - offline;
     $('#st-offline').textContent = offline;
     $('#st-hot').textContent = hot;
+    renderBills(sources);
     $('#st-last').textContent = sources.length ? ago(Math.max(...sources.map((s) => s.ts))).replace(' 前', '').replace('前', '') : '–';
 
     let html = state.error ? `<div class="banner">刷新失败：${esc(state.error)}（显示的是上次的数据）</div>` : '';

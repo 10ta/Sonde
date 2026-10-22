@@ -74,6 +74,8 @@ button { font: inherit; color: inherit; }
 .stat-item:last-child { border-right: none; }
 .stat-value { font-family: 'Archivo Black', sans-serif; font-size: 1.5rem; line-height: 1.1; color: var(--black); }
 .stat-label { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em; color: var(--text-muted); }
+.stat-money { cursor: help; }
+.stat-money .stat-value { white-space: nowrap; }
 
 /* ---------- 主体 ---------- */
 .main { flex: 1; width: 100%; max-width: 1480px; margin: 0 auto; padding: 1.5rem; }
@@ -311,7 +313,10 @@ details.raw summary { cursor: pointer; font-size: 0.72rem; font-weight: 700; let
 @media (max-width: 640px) {
   .header-content { padding: 0.6rem 1rem; }
   .logo h1 { font-size: 1.15rem; }
-  .stat-item { padding: 0.5rem 0.4rem; min-width: 0; }
+  .stats-bar { flex-wrap: wrap; }
+  .stat-item { padding: 0.5rem 0.4rem; min-width: 0; flex: 1 0 33.33%; border-bottom: 3px solid var(--black); }
+  .stat-item:nth-child(3n) { border-right: none; }
+  .stat-item:nth-last-child(-n+3) { border-bottom: none; }
   .stat-value { font-size: 1.15rem; }
   .stat-label { font-size: 0.6rem; letter-spacing: 0.04em; }
   .main { padding: 1rem; }
