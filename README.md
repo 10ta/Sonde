@@ -4,7 +4,8 @@
 
 ![preview](docs/preview.png)
 
-- 每个来源一张卡片：额度条（越线变色）、熔断线、7 天曲线（悬停看每小时的值）
+- 每个来源一张卡片：额度条（越线变色）、熔断线、7 天曲线（悬停看每小时的值）；放不下的说明行显示省略号，点一下展开
+- 页面每 30 秒读一次最新数据（切回页面时立即补读）。数据是各工具上次上报的结果，页面不能让工具重新测速，所以没有「刷新」按钮
 - 来源超过两个上报周期没动静就标成**离线**（比如 cdt-guard 停了，一眼能看到）
 - 19 套配色（与 1999 主题相同），手机可用；可以部署在子路径下
 
@@ -99,9 +100,9 @@ SONDE_TOKEN=<.sonde.env 里的 INGEST_TOKEN>
 
 | 工具 | 配置文件 | 生效 | 上报时机 |
 |---|---|---|---|
-| traffic-bot | `/etc/traffic-bot.env` | `systemctl restart traffic-bot` | 每次告警检查（默认 10 分钟） |
+| traffic-bot | `/etc/traffic-bot.env` | `systemctl restart traffic-bot` | 启动 15 秒后一次；之后每次告警检查（默认 10 分钟）、`/check`、定时播报 |
 | cdt-guard | `/etc/cdt-guard.env` | 下一次检查（5 分钟内） | 每次检查 |
-| cfst-ddns | `/etc/cfst-ddns.env` | 下一次测速 | 每次真正测速后（不到时间的空转不报） |
+| cfst-ddns | `/etc/cfst-ddns.env` | 下一次测速 | 每次真正测速后（不到时间的空转不报）；巡检只测当前 IP，卡片沿用上次复测 / 全量扫描的榜单 |
 
 先把三个工具更新到带上报功能的版本：在 scripts-de-moi 里 `sudo ./update.sh`。上报失败（网络不通、密钥不对）只会在日志里留一行警告，不影响它们本来的工作。
 

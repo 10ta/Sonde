@@ -79,31 +79,33 @@
       <path d="${pathOf(pts, 96, 22, 0, 100, x0, x1)}" style="stroke:${color}"/></svg>`;
   }
 
-  // 近 7 天曲线，悬停看每个小时的值
+  // 近 7 天曲线，悬停看每个小时的值（紧凑版：一行标题 + 44px 高的曲线，固定高度）
   function chart(pts, { label, unit = '', color = 'var(--accent-blue)', min = null, digits = 1 }) {
     const id = `c${++chartSeq}`;
+    const H = 44;
     if (!pts || pts.length < 2) {
-      return `<div class="chart"><div class="chart-head"><span>${esc(label)} · 7 天</span><span>数据还不够</span></div><svg viewBox="0 0 300 64"></svg></div>`;
+      return `<div class="chart"><div class="chart-head"><span>${esc(label)} · 7 天</span><span>数据还不够</span></div><svg viewBox="0 0 300 ${H}"></svg></div>`;
     }
     const vals = pts.map((p) => p[1]);
     let lo = min ?? Math.min(...vals), hi = Math.max(...vals);
     if (hi === lo) { hi += 1; lo = Math.max(min ?? -Infinity, lo - 1); }
     const pad = (hi - lo) * 0.08; hi += pad; if (min == null) lo -= pad;
     const x1 = nowSec(), x0 = x1 - 7 * 86400;
-    const line = pathOf(pts, 300, 64, lo, hi, x0, x1);
+    const line = pathOf(pts, 300, H, lo, hi, x0, x1);
     const firstX = (((pts[0][0] - x0) / (x1 - x0)) * 300).toFixed(1);
     const lastX = (((pts[pts.length - 1][0] - x0) / (x1 - x0)) * 300).toFixed(1);
     charts.set(id, { pts, unit, label, digits, lo, hi, x0, x1 });
-    const days = [1, 2, 3, 4, 5, 6].map((d) => `<line class="grid" x1="${d * 300 / 7}" x2="${d * 300 / 7}" y1="0" y2="64"/>`).join('');
+    const days = [1, 2, 3, 4, 5, 6].map((d) => `<line class="grid" x1="${d * 300 / 7}" x2="${d * 300 / 7}" y1="0" y2="${H}"/>`).join('');
     return `<div class="chart">
-      <div class="chart-head"><span>${esc(label)} · 7 天</span><span>最低 <b>${num(Math.min(...vals), digits)}</b> · 最高 <b>${num(Math.max(...vals), digits)}</b>${esc(unit)}</span></div>
-      <svg viewBox="0 0 300 64" preserveAspectRatio="none" data-chart="${id}" role="img" aria-label="${esc(label)}近 7 天曲线">
+      <div class="chart-head"><span>${esc(label)}</span><span><b>${num(Math.min(...vals), digits)}</b>–<b>${num(Math.max(...vals), digits)}</b>${esc(unit)}</span></div>
+      <svg viewBox="0 0 300 ${H}" preserveAspectRatio="none" data-chart="${id}" role="img" aria-label="${esc(label)}近 7 天曲线">
         ${days}
-        <path class="area" d="${line}L${lastX},64L${firstX},64Z" style="fill:${color}"/>
+        <path class="area" d="${line}L${lastX},${H}L${firstX},${H}Z" style="fill:${color}"/>
         <path class="line" d="${line}" style="stroke:${color}"/>
-        <line class="cursor" x1="0" x2="0" y1="0" y2="64" hidden/>
+        <line class="cursor" x1="0" x2="0" y1="0" y2="${H}" hidden/>
       </svg></div>`;
   }
+  const charts2 = (a, b) => `<div class="charts">${a}${b}</div>`;
 
   const tip = $('#chart-tip');
   document.addEventListener('pointermove', (e) => {
@@ -134,34 +136,34 @@
   const ageBadge = (src) => (isOffline(src)
     ? `<span class="badge bad" title="最后上报 ${esc(fullTime(src.ts))}，应每 ${Math.round(src.interval / 60)} 分钟一次">离线 · ${esc(ago(src.ts))}</span>`
     : `<span class="badge off" title="${esc(fullTime(src.ts))}">${esc(ago(src.ts))}</span>`);
-  const card = (src, title, badges, body, foot = '') => `
-    <article class="card${isOffline(src) ? ' offline' : ''}">
-      <div class="card-head"><h3>${title}</h3>${badges}${ageBadge(src)}</div>
+  const card = (src, title, badges, body, foot = '', { age = true, cls = '' } = {}) => `
+    <article class="card ${cls}${isOffline(src) ? ' offline' : ''}">
+      <div class="card-head"><h3>${title}</h3>${badges}${age ? ageBadge(src) : ''}</div>
       <div class="card-body">${body}</div>
       ${foot ? `<div class="card-foot">${foot}</div>` : ''}
     </article>`;
-  const kv = (pairs) => `<dl class="kv">${pairs.filter(Boolean).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`).join('')}</dl>`;
+  // 一行文字：放不下就省略号，悬停看全文，点一下展开 / 收起（手机上没有悬停）
+  const line = (icon, text, cls = '') => `<p class="line ${cls}" title="${esc(text)}">${icon ? `<span class="ic">${icon}</span>` : ''}${esc(text || '–')}</p>`;
+  // 2 × 2 的数字格
+  const stats = (pairs) => `<dl class="stats">${pairs.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`).join('')}</dl>`;
 
   // ---------- traffic-bot：每个来源一张卡 ----------
   function trafficCards(src, hist, hideAliyun) {
     const providers = (src.data?.providers || []).filter((p) => !(hideAliyun && p.name === 'Aliyun CDT'));
     return providers.map((p) => {
       const rows = (p.metrics || []).map((m) => {
-        if (m.alert) {
-          return m.pct > 0 ? `<div class="alert-row"><span class="badge warn">提醒</span>${esc(m.label)}</div>` : '';
-        }
-        const h = hist[m.key];
+        if (m.alert) return m.pct > 0 ? `<div class="alert-row"><span class="badge warn">提醒</span>${esc(m.label)}</div>` : '';
+        const lv = level(m.pct);
         return `<div class="metric">
-          <span class="metric-label">${esc(m.label)}</span>
-          <span class="metric-pct num ${m.pct >= 95 ? 'l5' : m.pct >= 80 ? 'l4' : ''}">${num(m.pct, 1)}%</span>
-          ${bar(m.pct)}
-          <div class="metric-detail"><span class="num">${esc(m.detail)}</span>${spark(h, `var(--sig-${level(m.pct)})`)}</div>
+          <span class="metric-label" title="${esc(m.label)}">${esc(m.label.replace(new RegExp(`^${p.name}\\s*`, 'i'), '') || m.label)}</span>
+          <span class="metric-detail num">${esc(m.detail)}</span>
+          <span class="metric-pct num${m.pct >= 95 ? ' l5' : m.pct >= 80 ? ' l4' : ''}">${num(m.pct, 1)}%</span>
+          <div class="metric-bar">${bar(m.pct)}${spark(hist[m.key], `var(--sig-${lv})`)}</div>
         </div>`;
       }).join('');
-      const body = (rows || '<p class="note muted">这一项没有额度指标</p>')
+      const body = (rows || '<p class="line muted">这一项没有额度指标</p>')
         + (p.html ? `<details class="raw"><summary>完整报告</summary><div class="tg">${tgHtml(p.html)}</div></details>` : '');
-      const badge = p.ok ? '' : '<span class="badge bad">查询失败</span>';
-      return card(src, esc(p.name), badge, body);
+      return card(src, esc(p.name), p.ok ? '' : '<span class="badge bad">查询失败</span>', body, '', { age: false });
     }).join('');
   }
 
@@ -179,65 +181,83 @@
     const pct = quota ? (used / quota) * 100 : 0;
     const costPct = d.cost_limit ? ((d.cost || 0) / d.cost_limit) * 100 : 0;
     const regions = Object.entries(d.by_region || {});
+    const problem = d.fail ? `最近 ${d.fail} 次查询阿里云失败：${d.last_error || ''}`
+      : d.cost_error ? `账单查询失败，费用熔断暂时失效：${d.cost_error}` : '';
     const body = `
-      <div class="big"><b class="num">${num(used, 1)}</b><span>/ ${num(quota, 0)} GB · ${num(pct, 1)}%</span></div>
+      <div class="hero">
+        <div class="big"><b class="num">${num(used, 1)}</b><span>/ ${num(quota, 0)} GB<br>${num(pct, 1)}%</span></div>
+        ${stats([
+          ['距熔断', `<span class="num">${num(toLimit, 1)} GB</span>`],
+          ['日均可用', `<span class="num">${num(toLimit / daysLeft, 1)} GB</span>`],
+          ['速率', `<span class="num">${num(d.rate_gbh, 2)} GB/h</span>`],
+          ['重置', `${daysLeft} 天后`],
+        ])}
+      </div>
       ${bar(pct, limit && quota ? [[(limit / quota) * 100, `熔断 ${num(limit, 0)}`]] : [], 'bar-lg')}
-      ${kv([
-        ['距熔断', `<span class="num">${num(toLimit, 1)} GB</span>`],
-        ['日均可用', `<span class="num">${num(toLimit / daysLeft, 1)} GB</span>`],
-        ['速率', `<span class="num">${num(d.rate_gbh, 2)} GB/h</span>`],
-        ['重置', `${daysLeft} 天后`],
-        d.cost_limit ? ['本月费用', `<span class="num">${num(d.cost, 2)} / ${num(d.cost_limit, 0)} ${esc(d.currency || '')}</span>`] : null,
-        ['熔断方式', d.mode === 'sg' ? '安全组封禁' : '关机'],
-      ])}
-      ${d.cost_limit ? `<div class="metric"><span class="metric-label">费用 / 费用熔断线</span><span class="metric-pct num">${num(costPct, 0)}%</span>${bar(costPct)}</div>` : ''}
-      ${regions.length > 1 ? `<p class="note muted">${regions.map(([r, g]) => `${esc(r)} ${num(g, 1)} GB`).join(' · ')}</p>` : ''}
-      ${d.fail ? `<p class="note bad">最近 ${esc(d.fail)} 次查询阿里云失败：${esc(d.last_error)}</p>` : ''}
-      ${d.cost_error ? `<p class="note bad">账单查询失败，费用熔断暂时失效：${esc(d.cost_error)}</p>` : ''}
-      ${chart(hist.used_gb, { label: '已用', unit: ' GB', color: 'var(--accent-blue)', min: 0 })}
-      ${chart(hist.rate_gbh, { label: '速率', unit: ' GB/h', color: 'var(--accent-purple)', min: 0, digits: 2 })}`;
+      ${d.cost_limit ? `<div class="metric">
+          <span class="metric-label">本月费用</span>
+          <span class="metric-detail num">${num(d.cost, 2)} / ${num(d.cost_limit, 0)} ${esc(d.currency || '')}</span>
+          <span class="metric-pct num">${num(costPct, 0)}%</span>
+          <div class="metric-bar">${bar(costPct)}${spark(hist.cost && hist.cost.map(([t, v]) => [t, d.cost_limit ? (v / d.cost_limit) * 100 : 0]), `var(--sig-${level(costPct)})`)}</div>
+        </div>` : ''}
+      ${line(problem ? '⚠️' : '🗺', problem || (regions.length ? regions.map(([r, g]) => `${r} ${num(g, 1)} GB`).join(' · ') : '–'), problem ? 'bad' : 'muted')}
+      ${charts2(chart(hist.used_gb, { label: '已用 GB', color: 'var(--accent-blue)', min: 0 }),
+                chart(hist.rate_gbh, { label: '速率 GB/h', color: 'var(--accent-purple)', min: 0, digits: 2 }))}`;
     const badges = `<span class="badge ${guard[0]}">${guard[1]}</span><span class="badge ${st}">${esc(d.status || '?')}</span>`;
     const pool = d.cls === 'international' ? '海外 / 香港' : '中国内地';
-    return card(src, `🟧 ${esc(d.name || 'Aliyun CDT')}`, badges, body, `<span>CDT · ${pool}</span><span>cdt-guard</span>`);
+    return card(src, `🟧 ${esc(d.name || 'Aliyun CDT')}`, badges, body,
+      `<span>CDT · ${pool}</span><span>熔断方式：${d.mode === 'sg' ? '安全组封禁' : '关机'}</span>`);
   }
 
-  // ---------- cfst-ddns：每个目标一张卡 ----------
+  // ---------- cfst-ddns：每个目标一张卡，行数固定 ----------
   const KIND = { updated: ['info', '已切换'], unchanged: ['ok', '无变化'], healthy: ['ok', '巡检正常'], failed: ['bad', '失败'] };
+  const MODE = { check: '巡检', pool: '复测榜单', full: '全量扫描' };
   function cfstCard(src, hist) {
     const d = src.data || {};
     const [kc, kl] = KIND[d.kind] || ['ink', d.kind || '?'];
     const failed = d.kind === 'failed';
-    const head = failed
-      ? `<div class="big"><b>${esc(d.colo || '?')}</b><span>当前解析保持不变</span></div><p class="note bad">${esc(d.reason)}</p>`
-      : `<div class="big"><b>${d.kind === 'updated' && d.old_colo ? `${esc(d.old_colo)} → ` : ''}${esc(d.colo || '?')}</b><span>机房</span></div>
-         ${kv([
-           d.metric ? [d.metric, `<span class="num">${num(d.speed, 2)} MB/s</span>`] : null,
-           ['延迟', `<span class="num">${num(d.lat, 0)} ms</span>${d.group ? ` <span class="muted">${esc(d.group.replace(' 段', ''))}</span>` : ''}`],
-           ['丢包', `<span class="num">${num(d.loss, 2)}</span>`],
-           ['来源', esc(d.src || '–')],
-         ])}
-         ${d.why ? `<p class="note">💡 ${esc(d.why)}</p>` : ''}
-         ${d.compare ? `<p class="note muted">🆚 ${esc(d.compare)}</p>` : ''}`;
-    const top = (d.top || []).length ? `
-      <table class="top"><thead><tr><th>#</th><th>机房</th><th>ms</th><th>${d.metric ? 'MB/s' : '丢包'}</th><th>段</th><th>来源</th><th></th></tr></thead><tbody>
-      ${d.top.map((r, i) => `<tr class="${r.mark}"><td>${i + 1}</td><td>${esc(r.colo)}</td><td>${num(r.lat, 0)}</td>
+    const colo = d.kind === 'updated' && d.old_colo && d.old_colo !== d.colo
+      ? `<b>${esc(d.old_colo)}</b><i>→</i><b>${esc(d.colo || '?')}</b>` : `<b>${esc(d.colo || '?')}</b>`;
+    const hero = `<div class="hero">
+        <div class="big colo">${colo}${d.kind === 'updated' && d.old_colo && d.old_colo !== d.colo ? '' : `<span>${failed ? '解析未变' : '机房'}</span>`}</div>
+        ${stats([
+          [d.metric || '速度', failed ? '–' : (d.metric ? `<span class="num">${num(d.speed, 2)}</span> <small>MB/s</small>` : '–')],
+          ['延迟', failed ? '–' : `<span class="num">${num(d.lat, 0)}</span> <small>ms${d.group ? ` ${esc(d.group.replace(/ ?段$/, '').replace(/ms$/, ''))}` : ''}</small>`],
+          ['丢包', failed ? '–' : `<span class="num">${num(d.loss, 2)}</span>`],
+          ['来源', failed ? '–' : esc(d.src || '–')],
+        ])}
+      </div>`;
+    // 榜单固定 5 行，不足的补空行，卡片高度不随数据变
+    const rows = (d.top || []).slice(0, 5);
+    while (rows.length < 5) rows.push(null);
+    const ageTop = d.top_ts && d.mode === 'check' && d.top?.length ? ` · ${ago(d.top_ts)}` : '';
+    const top = `<table class="top">
+      <thead><tr><th>#</th><th>机房</th><th>ms</th><th>${d.metric ? 'MB/s' : '丢包'}</th><th>段</th><th>来源</th><th class="cap">榜单${esc(ageTop)}</th></tr></thead><tbody>
+      ${rows.map((r, i) => (r ? `<tr class="${r.mark}"><td>${i + 1}</td><td>${esc(r.colo)}</td><td>${num(r.lat, 0)}</td>
         <td>${d.metric ? num(r.speed, 2) : num(r.loss, 2)}</td><td>${esc(r.group)}</td><td>${esc(r.src)}</td>
-        <td class="mark">${r.mark === 'pick' ? '◀ 选用' : r.mark === 'old' ? '原' : ''}</td></tr>`).join('')}
-      </tbody></table>` : '';
-    const body = head + top
-      + (d.metric ? chart(hist.speed, { label: d.metric, unit: ' MB/s', color: 'var(--accent-green)', min: 0, digits: 2 }) : '')
-      + chart(hist.lat, { label: '延迟', unit: ' ms', color: 'var(--accent-orange)', digits: 0 });
+        <td class="mark">${r.mark === 'pick' ? '◀ 选用' : r.mark === 'old' ? '原' : ''}</td></tr>`
+        : `<tr class="pad"><td>${i + 1}</td><td>–</td><td></td><td></td><td></td><td></td><td></td></tr>`)).join('')}
+      </tbody></table>`;
+    const body = hero
+      + line(failed ? '⚠️' : '💡', failed ? d.reason : d.why, failed ? 'bad' : '')
+      + line('🆚', d.compare, 'muted')
+      + top
+      + charts2(d.metric ? chart(hist.speed, { label: `${d.metric} MB/s`, color: 'var(--accent-green)', min: 0, digits: 2 })
+                         : chart(hist.loss, { label: '丢包', color: 'var(--accent-green)', min: 0, digits: 2 }),
+                chart(hist.lat, { label: '延迟 ms', color: 'var(--accent-orange)', digits: 0 }))
+      + line('🔎', d.scan, 'muted small')
+      + line('⚙️', d.params, 'muted small');
     const badges = `<span class="badge ${kc}">${kl}</span>${d.peak ? '<span class="badge ink">晚高峰</span>' : ''}`;
-    const foot = `<span>${esc(d.path || '')}</span><span>${esc(d.host || '')}${d.version ? ` · v${esc(d.version)}` : ''}${d.elapsed ? ` · ${esc(d.elapsed)}s` : ''}</span>`;
-    return card(src, esc(d.label || src.source.split(':')[1] || 'cfst'), badges, body, foot);
+    const foot = `<span>${esc(d.path || MODE[d.mode] || '')}</span><span>${d.elapsed ? `用时 ${esc(d.elapsed)}s` : ''}</span>`;
+    return card(src, esc(d.label || src.source.split(':')[1] || 'cfst'), badges, body, foot, { cls: 'cfst' });
   }
 
   // ---------- 页面 ----------
   const state = { status: null, history: {}, error: '', loadedAt: 0 };
 
-  function section(title, note, cards, wide = false) {
+  function section(title, note, cards, wide = false, extra = '') {
     if (!cards) return '';
-    return `<section class="section"><div class="sec-head"><h2>${title}</h2><span class="sec-note">${note}</span></div>
+    return `<section class="section"><div class="sec-head"><h2>${title}</h2><span class="sec-note">${note}</span>${extra}</div>
       <div class="grid${wide ? ' grid-wide' : ''}">${cards}</div></section>`;
   }
 
@@ -273,7 +293,8 @@
     $('#st-last').textContent = sources.length ? ago(Math.max(...sources.map((s) => s.ts))).replace(' 前', '').replace('前', '') : '–';
 
     let html = state.error ? `<div class="banner">刷新失败：${esc(state.error)}（显示的是上次的数据）</div>` : '';
-    html += section('额度', 'traffic-bot · 各云的免费额度与账单', tb.map((s) => trafficCards(s, hist(s.source), cdt.length > 0)).join(''));
+    html += section('额度', 'traffic-bot · 各云的免费额度与账单', tb.map((s) => trafficCards(s, hist(s.source), cdt.length > 0)).join(''),
+      false, tb[0] ? ageBadge(tb[0]) : '');
     html += section('阿里云 CDT', 'cdt-guard · 流量熔断与费用熔断', cdt.map((s) => cdtCard(s, hist(s.source))).join(''), true);
     html += section('优选 IP', 'cfst-ddns · 当前解析的节点与测速', cfst.map((s) => cfstCard(s, hist(s.source))).join(''), true);
     html += section('其他', '未识别的来源', other.map((s) => card(s, esc(s.source), '', `<pre class="tg">${esc(JSON.stringify(s.data, null, 2))}</pre>`)).join(''));
@@ -307,6 +328,9 @@
     state.loadedAt = Date.now();
     render();
   }
+
+  // 点一下省略的那一行：展开全文 / 收起
+  document.addEventListener('click', (e) => { const l = e.target.closest('.line'); if (l) l.classList.toggle('open'); });
 
   // ---------- 配色菜单 ----------
   const menu = $('#theme-menu');
@@ -346,16 +370,13 @@
   if (!SCHEMES[currentScheme()]) document.documentElement.dataset.scheme = DEFAULT_SCHEME;
 
   // ---------- 启动 ----------
-  const refreshBtn = $('#btn-refresh');
-  refreshBtn.addEventListener('click', () => {
-    refreshBtn.classList.remove('spin'); void refreshBtn.offsetWidth; refreshBtn.classList.add('spin');
-    load(true);
-  });
+  // 每 30 秒读一次 Worker 里的最新数据（切回页面时立即补读）。没有「立即刷新」按钮：
+  // 读到的只是工具上次上报的结果，按钮并不能让工具重新测速，30 秒的自动刷新已经够了
   load(true);
   setInterval(() => {
     if (document.visibilityState !== 'visible') return;
     // 展开了「完整报告」时不重绘，免得刚打开就被收起
-    if (document.querySelector('details.raw[open]')) return;
+    if (document.querySelector('details.raw[open], .line.open')) return;
     if (Date.now() - state.loadedAt >= STATUS_MS - 1000) load();
   }, 5000);
   document.addEventListener('visibilitychange', () => {
