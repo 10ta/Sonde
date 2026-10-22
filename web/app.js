@@ -47,10 +47,16 @@
 
   // traffic-bot 原文是 TG 用的 HTML：只保留这几个排版标签、去掉所有属性，其余一律当文字
   const TG_TAGS = new Set(['B', 'I', 'U', 'S', 'CODE', 'PRE', 'BLOCKQUOTE']);
+  // 🛡 🖥 🗺 ⏸ ☁ 这类 emoji 在 Unicode 里默认按「文字样式」显示：后面不跟 U+FE0F 时，浏览器会按正文字体去找，
+  // 常常落到 Segoe UI Symbol 之类的黑白符号字体。这里给它们补上 U+FE0F，让浏览器改用 emoji 字体（彩色）。
+  // 默认就是彩色的（🔄 💰）和已经带 FE0F 的（⚠️ ⚙️）不动
+  const EMO_RE = /(\p{Extended_Pictographic})(?![\uFE0F\uFE0E\u200D])/gu;
+  const emo = (str) => String(str ?? '').replace(EMO_RE, (m, c) => (/\p{Emoji_Presentation}/u.test(c) ? c : `${c}\uFE0F`));
+
   function tgHtml(html) {
     const doc = new DOMParser().parseFromString(`<div>${html || ''}</div>`, 'text/html');
     const walk = (node) => [...node.childNodes].map((n) => {
-      if (n.nodeType === Node.TEXT_NODE) return esc(n.textContent);
+      if (n.nodeType === Node.TEXT_NODE) return esc(emo(n.textContent));
       if (n.nodeType !== Node.ELEMENT_NODE || /^(SCRIPT|STYLE|TEMPLATE|IFRAME|OBJECT)$/.test(n.tagName)) return '';
       const inner = walk(n);
       return TG_TAGS.has(n.tagName) ? `<${n.tagName.toLowerCase()}>${inner}</${n.tagName.toLowerCase()}>` : inner;
@@ -143,7 +149,7 @@
       ${foot ? `<div class="card-foot">${foot}</div>` : ''}
     </article>`;
   // 一行文字：放不下就省略号，悬停看全文，点一下展开 / 收起（手机上没有悬停）
-  const line = (icon, text, cls = '') => `<p class="line ${cls}" title="${esc(text)}">${icon ? `<span class="ic">${icon}</span>` : ''}${esc(text || '–')}</p>`;
+  const line = (icon, text, cls = '') => `<p class="line ${cls}" title="${esc(text)}">${icon ? `<span class="ic">${emo(icon)}</span>` : ''}${esc(emo(text || '–'))}</p>`;
   // 2 × 2 的数字格
   const stats = (pairs) => `<dl class="stats">${pairs.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`).join('')}</dl>`;
 
@@ -234,7 +240,7 @@
       `🔄 ${resetText(reset, 8)} · 日均可用 <b>${esc(gb(toLimit / daysLeft))}</b>`,
       d.fail ? `⚠️ <b>最近 ${esc(d.fail)} 次查询阿里云失败</b>：${esc(d.last_error || '')}` : '',
       d.cost_error ? `⚠️ <b>账单查询失败，费用熔断暂时失效</b>：${esc(d.cost_error)}` : '',
-    ].filter(Boolean).join('\n');
+    ].filter(Boolean).map(emo).join('\n');
     const pool = d.cls === 'international' ? '本月 · 海外/香港' : '本月 · 中国内地';
     const badges = `<span class="badge ${gc} keep-case">cdt-guard ${gt}</span>`;
     return { group: 'AlibabaCloud', html: card(src, tbTitle('AlibabaCloud', 'CDT', esc(pool)), badges, `${rows}<div class="tg">${lines}</div>`, '', { cls: 'tb' }) };

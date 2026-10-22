@@ -347,3 +347,6 @@ details.raw summary { cursor: pointer; font-size: 0.72rem; font-weight: 700; let
   .masonry > .card { margin-bottom: 1.1rem; }
 }
 .badge.keep-case { text-transform: none; }
+
+/* 报告里的 emoji 一律按彩色 emoji 显示（支持 font-variant-emoji 的浏览器；不支持的靠 app.js 补的 U+FE0F） */
+.tg, .line, .alert-row { font-variant-emoji: emoji; }
