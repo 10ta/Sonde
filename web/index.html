@@ -52,6 +52,10 @@
 
   <div class="theme-menu" id="theme-menu" role="menu" hidden></div>
   <div class="chart-tip" id="chart-tip" hidden></div>
+  <!-- 小柱图里「没有数据」那天的斜纹 -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <pattern id="sp-hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="1.6" height="4" class="hatch"/></pattern>
+  </defs></svg>
   <script src="app.js"></script>
 </body>
 </html>

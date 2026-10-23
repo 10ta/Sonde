@@ -79,29 +79,12 @@ button { font: inherit; color: inherit; }
 
 /* ---------- 主体 ---------- */
 .main { flex: 1; width: 100%; max-width: 2560px; margin: 0 auto; padding: 1.5rem; }
-/* 宽屏：「额度」和「优选 IP」并排，优选 IP 的卡片在右边竖着排；其他分区（提示、未识别的来源）占满整行 */
-@media (min-width: 1680px) {
-  .main.split { display: grid; grid-template-columns: minmax(0, 2.3fr) minmax(400px, 1fr); column-gap: 1.5rem; align-items: start; }
-  .main.split > :not(.sec-quota):not(.sec-cfst) { grid-column: 1 / -1; }
-  .main.split .sec-cfst .grid { grid-template-columns: 1fr; }
-}
 
-.section { margin-bottom: 2.25rem; }
-.sec-head {
-  display: flex; align-items: baseline; gap: 0.75rem; flex-wrap: wrap;
-  margin-bottom: 1rem; padding-bottom: 0.4rem;
-  border-bottom: 4px solid var(--black);
-}
-.sec-head h2 { font-size: 1.4rem; }
-.sec-note { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; color: var(--text-muted); }
-.sec-head .badge { margin-left: auto; align-self: center; }
-
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.25rem; align-items: start; }
-.grid-wide { grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); }
 
 /* ---------- 卡片 ---------- */
 .card {
   position: relative;
+  container-type: inline-size;   /* 里面的大字按卡片宽度缩放 */
   background: var(--card-bg);
   border: var(--border-width) solid var(--black);
   box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--shadow);
@@ -109,14 +92,13 @@ button { font: inherit; color: inherit; }
   min-width: 0;
 }
 .card-head {
-  display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
-  padding: 0.55rem 0.75rem;
+  display: flex; align-items: center; gap: 0.4rem; flex-wrap: nowrap;   /* 一行：放不下时先省略副标题 */
+  padding: 0.4rem 0.65rem;
   border-bottom: 3px solid var(--black);
 }
-.card-head h3 { font-size: 1.05rem; margin-right: auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.card.cfst .card-head { flex-wrap: nowrap; }
-.card.cfst .card-head .badge { flex-shrink: 0; }
-.card-body { padding: 0.65rem 0.75rem; display: flex; flex-direction: column; gap: 0.55rem; }
+.card-head h3 { font-size: 0.98rem; flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-head .badge { flex-shrink: 0; }
+.card-body { padding: 0.55rem 0.65rem 0.6rem; display: flex; flex-direction: column; gap: 0.5rem; }
 .card-foot {
   display: flex; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap;
   padding: 0.35rem 0.75rem;
@@ -145,21 +127,28 @@ button { font: inherit; color: inherit; }
 .badge.off  { background: repeating-linear-gradient(-45deg, var(--card-bg) 0 4px, var(--hatch) 4px 6px); }
 .badge.age  { background: var(--card-bg); color: var(--text); border-color: var(--line); text-transform: none; }
 
-/* ---------- 额度条：第一行 名称 · 用量 · 百分比，第二行 条 + 7 天小曲线 ---------- */
-.metric { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 0.2rem 0.6rem; align-items: baseline; }
-.metric-label { font-weight: 700; font-size: 0.82rem; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.metric-detail { font-size: 0.72rem; color: var(--text-muted); white-space: nowrap; }
-.metric-pct { font-family: 'Archivo Black', sans-serif; font-size: 0.9rem; min-width: 3.4em; text-align: right; }
+/* ---------- 指标行：名称 · 用量 · 百分比 / 额度条，右边两行高的「近 7 天每天的用量」 ---------- */
+.metric { display: grid; grid-template-columns: minmax(0, 1fr) auto auto 75px; gap: 0.15rem 0.55rem; align-items: baseline; }
+.metric-label { font-weight: 700; font-size: 0.8rem; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.metric-detail { font-size: 0.7rem; color: var(--text-muted); white-space: nowrap; }
+.metric-pct { font-family: 'Archivo Black', sans-serif; font-size: 0.86rem; min-width: 3.3em; text-align: right; }
 .metric-pct.l4 { color: var(--sig-text-4); }
 .metric-pct.l5 { color: var(--sig-text-5); text-decoration: underline 3px; text-underline-offset: 3px; }
-.metric-bar { grid-column: 1 / -1; display: flex; align-items: center; gap: 0.5rem; }
-.metric-bar .bar { flex: 1; }
-.metric-bar .spark-box { flex: 0 0 64px; height: 18px; border-bottom: 2px solid var(--line); cursor: help; }
-.metric-bar .spark { display: block; width: 64px; height: 16px; }
+.metric-bar { grid-column: 1 / 4; }
+.metric .spk { grid-column: 4; grid-row: 1 / 3; align-self: end; width: 75px; height: 30px; overflow: visible; cursor: help;
+  border-bottom: 2px solid var(--black); }
+.spk rect.b { fill: var(--sig-1); }
+.spk rect.b.over { fill: var(--sig-4); }
+.spk rect.b.today { opacity: 0.55; }   /* 今天还没过完 */
+.spk rect.nd { fill: url(#sp-hatch); }
+#sp-hatch .hatch { fill: color-mix(in srgb, var(--black) 30%, transparent); }
+.spk rect.hit { fill: transparent; }
+.spk rect.hit:hover { fill: color-mix(in srgb, var(--black) 10%, transparent); }
+.spk line.budget { stroke: var(--black); stroke-width: 1.5; stroke-dasharray: 3 2; }
 
 .bar {
   position: relative;
-  height: 14px;
+  height: 13px;
   border: 2px solid var(--black);
 }
 /* 刻度：10 个格子，每格右边一条 2px 的边框。边框按整像素画，页面缩放时每条一样粗（渐变画的线会有粗有细） */
@@ -195,10 +184,9 @@ button { font: inherit; color: inherit; }
 .big.colo > span { align-self: flex-end; }
 /* 优选 IP 卡片：每一块高度固定，卡片不会因为内容多少有长有短；同一行的卡片等高 */
 .card.cfst .hero { height: 86px; }
-.card.cfst .big.colo b { font-size: clamp(1.3rem, 2.4vw, 1.9rem); }
+.card.cfst .big.colo b { font-size: clamp(1.2rem, 8.5cqi, 1.9rem); }
+.card.cfst .big.colo.sw b { font-size: clamp(1.05rem, 6.2cqi, 1.9rem); }   /* 「旧 → 新」两个机房 */
 .card.cfst .top th, .card.cfst .top td { height: 22px; line-height: 14px; box-sizing: border-box; }
-.grid:has(> .card.cfst) { align-items: stretch; }
-.card.cfst .card-body { flex: 1; }
 .big.colo i { font-style: normal; font-weight: 700; font-size: 1.2rem; color: var(--text-muted); }
 .stats { display: grid; grid-template-columns: 1fr 1fr; border: 2px solid var(--line); }
 .stats > div { padding: 0.25rem 0.45rem; min-width: 0; border-right: 2px solid var(--line); border-bottom: 2px solid var(--line); }
@@ -227,8 +215,7 @@ button { font: inherit; color: inherit; }
 .chart-plot svg { display: block; width: 100%; height: 44px; overflow: visible; border-left: 2px solid var(--line); border-bottom: 2px solid var(--line); }
 .y-axis { display: flex; flex-direction: column; justify-content: space-between; min-width: 1.6rem; height: 46px;
   font: 700 0.56rem/1 'Space Grotesk', sans-serif; color: var(--text-muted); text-align: right; font-variant-numeric: tabular-nums; }
-.spark { display: block; overflow: visible; }
-.spark path, .chart path.line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.chart path.line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .chart path.area { stroke: none; opacity: 0.18; }
 .chart line.grid { stroke: var(--grid-line); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .chart line.cursor { stroke: var(--black); stroke-width: 1; vector-effect: non-scaling-stroke; }
@@ -251,14 +238,43 @@ button { font: inherit; color: inherit; }
 .top th.cap { text-align: right; text-transform: none; letter-spacing: 0.04em; }
 .top tr.pad td { color: var(--text-muted); text-align: left; border-bottom-color: transparent; font-size: 0.7rem; }
 
-/* ---------- traffic-bot 原文（TG 消息同款排版） ---------- */
-details.raw { border-top: 2px solid var(--line); padding-top: 0.35rem; }
-details.raw summary { cursor: pointer; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; color: var(--text-muted); text-transform: uppercase; }
-.tg { margin-top: 0.5rem; white-space: pre-wrap; font-size: 0.8rem; line-height: 1.5; overflow-wrap: anywhere; }
+/* ---------- 明细（引用块，TG 同款）/ 状态行：一项一行，放不下就省略号，点一下展开 ---------- */
+.ln { font-size: 0.75rem; line-height: 1.45; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.ln.open { white-space: normal; overflow-wrap: anywhere; }
+.ln i { font-style: normal; color: var(--text-muted); }
+.ln code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.92em; }
+blockquote.bd { border-left: 4px solid var(--accent); padding: 0.2rem 0 0.2rem 0.55rem; background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.notes { display: flex; flex-direction: column; }
+.notes .ln { color: color-mix(in srgb, var(--text) 82%, var(--card-bg)); }
+.metric + blockquote.bd, .metric + .notes, .alert-row + .notes { margin-top: 0.1rem; }
 
+/* 旧版 bot 只给 TG 原文时的显示 */
+.tg { white-space: pre-wrap; font-size: 0.75rem; line-height: 1.5; overflow-wrap: anywhere; }
 .tg code, .tg pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.92em; }
 .tg pre { overflow-x: auto; }
 .tg blockquote { border-left: 4px solid var(--accent); padding: 0.15rem 0 0.15rem 0.6rem; margin: 0.2rem 0; background: color-mix(in srgb, var(--accent) 8%, transparent); }
+
+/* ---------- 瀑布流：列宽不小于 360px，列数随页面宽度变（app.js 分列） ---------- */
+.mason { display: flex; gap: 16px; align-items: flex-start; }
+.mason > .col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.card.tb h3 { display: flex; align-items: baseline; gap: 0.4rem; min-width: 0; }
+.card.tb h3 .grp { font: 700 0.6rem 'Space Grotesk', sans-serif; letter-spacing: 0.08em; padding: 0.05rem 0.3rem; background: var(--black); color: var(--white); align-self: center; flex-shrink: 0; }
+.card.tb h3 .sub { font: 700 0.66rem 'Space Grotesk', sans-serif; letter-spacing: 0.02em; text-transform: none; color: var(--text-muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card.tb h3 .sub i { font-style: normal; }
+.badge.keep-case { text-transform: none; }
+
+/* 图例：一行，说明三种样式各是什么意思 */
+.legend { display: flex; flex-wrap: wrap; gap: 0.35rem 1.25rem; margin: -0.25rem 0 0.9rem; font-size: 0.7rem; font-weight: 700; color: var(--text-muted); }
+.legend > span { display: inline-flex; align-items: center; gap: 0.4rem; }
+.legend i { display: inline-block; flex-shrink: 0; }
+.lg-bar { width: 26px; height: 10px; border: 2px solid var(--black); background: linear-gradient(90deg, var(--sig-1) 55%, transparent 55%); }
+.lg-spk { display: inline-flex !important; align-items: flex-end; gap: 2px; height: 14px; padding-bottom: 0; border-bottom: 2px solid var(--black);
+  background: linear-gradient(var(--black), var(--black)) 0 5px / 100% 1px no-repeat; }
+.lg-spk b { width: 5px; height: 8px; background: var(--sig-1); }
+.lg-spk b:first-child { height: 4px; }
+.lg-spk b.over { height: 12px; background: var(--sig-4); }
+.lg-spk b.nd { height: 12px; background: repeating-linear-gradient(-45deg, transparent 0 2px, var(--hatch) 2px 3px); }
+.lg-bd { width: 4px; height: 14px; background: var(--accent); }
 
 /* ---------- 空状态 / 加载 ---------- */
 .empty { text-align: center; padding: 3.5rem 2rem; border: 4px dashed var(--black); background: var(--card-bg); }
@@ -335,31 +351,9 @@ details.raw summary { cursor: pointer; font-size: 0.72rem; font-weight: 700; let
   .stat-value { font-size: 1.15rem; }
   .stat-label { font-size: 0.6rem; letter-spacing: 0.04em; }
   .main { padding: 1rem; }
-  .grid, .grid-wide { grid-template-columns: 1fr; gap: 1.1rem; }
-  .sec-head h2 { font-size: 1.15rem; }
   .theme-menu-cols { grid-template-columns: 1fr; }
   .big b { font-size: 1.6rem; }
   .badge { padding: 0 0.3rem; letter-spacing: 0.02em; }
 }
 
-/* ---------- 额度：Cloudflare 的几张卡占一列，其他来源在右边排 k 列（瀑布流） ----------
-   k 由 app.js 按卡片实际高度算出来，让左右尽量一样高；窄于 760px：全部单列 */
-.tb-layout { display: grid; grid-template-columns: minmax(290px, 1fr) minmax(0, 1fr); gap: 1.25rem; align-items: start; }
-.tb-stack { display: flex; flex-direction: column; gap: 1.25rem; min-width: 0; }
-.masonry { columns: 290px; column-gap: 1.25rem; }
-.tb-layout .masonry { columns: 1; }
-.masonry > .card { break-inside: avoid; margin-bottom: 1.25rem; width: 100%; }
-.masonry > .card:last-child { margin-bottom: 0; }
-.card.tb h3 { display: flex; align-items: baseline; gap: 0.4rem; min-width: 0; }
-.card.tb h3 .grp { font: 700 0.62rem 'Space Grotesk', sans-serif; letter-spacing: 0.08em; padding: 0.05rem 0.3rem; background: var(--black); color: var(--white); align-self: center; flex-shrink: 0; }
-.card.tb h3 .sub { font: 700 0.68rem 'Space Grotesk', sans-serif; letter-spacing: 0.02em; text-transform: none; color: var(--text-muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.card.tb h3 .sub i { font-style: normal; }
-.card.tb .tg { margin-top: 0; font-size: 0.75rem; line-height: 1.5; }
-.card.tb .metric + .tg { border-top: 2px solid var(--line); padding-top: 0.45rem; }
-@media (max-width: 760px) {
-  .tb-layout { grid-template-columns: 1fr !important; }
-  .masonry { columns: 1 !important; }
-  .masonry > .card { margin-bottom: 1.1rem; }
-}
-.badge.keep-case { text-transform: none; }
 

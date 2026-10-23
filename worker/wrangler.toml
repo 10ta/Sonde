@@ -11,8 +11,8 @@ migrations_dir = "migrations"
 database_id = "a5f387b5-6fbb-43ec-9785-4ff5f0164b3f"
 
 [vars]
-# 历史曲线保留几天
-HISTORY_DAYS = "7"
+# 历史保留几天：曲线和「近 7 天每天的用量」看 7 天，多留 1 天给第一天当起点（算当天用了多少要减前一天的值）
+HISTORY_DAYS = "8"
 
 # 用 `npx wrangler secret put INGEST_TOKEN` 设置（init.sh 会自动生成并设置），不要写进仓库：
 #   INGEST_TOKEN   各工具上报时带的密钥
