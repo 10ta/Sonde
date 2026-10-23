@@ -127,24 +127,28 @@ button { font: inherit; color: inherit; }
 .badge.off  { background: repeating-linear-gradient(-45deg, var(--card-bg) 0 4px, var(--hatch) 4px 6px); }
 .badge.age  { background: var(--card-bg); color: var(--text); border-color: var(--line); text-transform: none; }
 
-/* ---------- 指标行：名称 · 用量 · 百分比 / 额度条，右边两行高的「近 7 天每天的用量」 ---------- */
-.metric { display: grid; grid-template-columns: minmax(0, 1fr) auto auto 75px; gap: 0.15rem 0.55rem; align-items: baseline; }
+/* ---------- 指标行：名称 · 用量 · 百分比 / 额度条，右边两行高的小折线（近 7 天滚动 24 小时用量） ---------- */
+.metric { display: grid; grid-template-columns: minmax(0, 1fr) auto auto 96px; gap: 0.15rem 0.55rem; align-items: baseline; }
 .metric-label { font-weight: 700; font-size: 0.8rem; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .metric-detail { font-size: 0.7rem; color: var(--text-muted); white-space: nowrap; }
 .metric-pct { font-family: 'Archivo Black', sans-serif; font-size: 0.86rem; min-width: 3.3em; text-align: right; }
 .metric-pct.l4 { color: var(--sig-text-4); }
 .metric-pct.l5 { color: var(--sig-text-5); text-decoration: underline 3px; text-underline-offset: 3px; }
 .metric-bar { grid-column: 1 / 4; }
-.metric .spk { grid-column: 4; grid-row: 1 / 3; align-self: end; width: 75px; height: 30px; overflow: visible; cursor: help;
-  border-bottom: 2px solid var(--black); }
-.spk rect.b { fill: var(--sig-1); }
-.spk rect.b.over { fill: var(--sig-4); }
-.spk rect.b.today { opacity: 0.55; }   /* 今天还没过完 */
-.spk rect.nd { fill: url(#sp-hatch); }
-#sp-hatch .hatch { fill: color-mix(in srgb, var(--black) 30%, transparent); }
-.spk rect.hit { fill: transparent; }
-.spk rect.hit:hover { fill: color-mix(in srgb, var(--black) 10%, transparent); }
-.spk line.budget { stroke: var(--black); stroke-width: 1.5; stroke-dasharray: 3 2; }
+.metric .ls { grid-column: 4; grid-row: 1 / 3; align-self: end; width: 96px; height: 38px; overflow: visible; cursor: crosshair; }
+.ls .cap { font: 700 8.5px 'Space Grotesk', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: var(--text-muted); }
+.ls .mid { stroke: var(--black); stroke-width: 1; opacity: 0.22; }
+.ls .ref { stroke: var(--black); stroke-width: 1.2; stroke-dasharray: 3 2; }
+.ls .ref.out { opacity: 0.45; }
+.ls .seg { fill: none; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+.ls .area { stroke: none; opacity: 0.16; }
+.ls .gap { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 1 2; }
+.ls .cursor { stroke: var(--black); stroke-width: 1; }
+.ls .s1, .lg-ls .s1 { stroke: var(--sig-1); fill: var(--sig-1); }
+.ls .s2 { stroke: var(--sig-2); fill: var(--sig-2); }
+.ls .s3 { stroke: var(--sig-3); fill: var(--sig-3); }
+.ls .s4, .lg-ls .s4 { stroke: var(--sig-4); fill: var(--sig-4); }
+.ls .s5 { stroke: var(--sig-5); fill: var(--sig-5); }
 
 .bar {
   position: relative;
@@ -268,12 +272,10 @@ blockquote.bd { border-left: 4px solid var(--accent); padding: 0.2rem 0 0.2rem 0
 .legend > span { display: inline-flex; align-items: center; gap: 0.4rem; }
 .legend i { display: inline-block; flex-shrink: 0; }
 .lg-bar { width: 26px; height: 10px; border: 2px solid var(--black); background: linear-gradient(90deg, var(--sig-1) 55%, transparent 55%); }
-.lg-spk { display: inline-flex !important; align-items: flex-end; gap: 2px; height: 14px; padding-bottom: 0; border-bottom: 2px solid var(--black);
-  background: linear-gradient(var(--black), var(--black)) 0 5px / 100% 1px no-repeat; }
-.lg-spk b { width: 5px; height: 8px; background: var(--sig-1); }
-.lg-spk b:first-child { height: 4px; }
-.lg-spk b.over { height: 12px; background: var(--sig-4); }
-.lg-spk b.nd { height: 12px; background: repeating-linear-gradient(-45deg, transparent 0 2px, var(--hatch) 2px 3px); }
+.lg-ls { width: 30px; height: 14px; flex-shrink: 0; overflow: visible; }
+.lg-ls .mid { stroke: var(--black); stroke-width: 1; opacity: 0.25; }
+.lg-ls .ref { stroke: var(--black); stroke-width: 1.2; stroke-dasharray: 3 2; }
+.lg-ls .seg { fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .lg-bd { width: 4px; height: 14px; background: var(--accent); }
 
 /* ---------- 空状态 / 加载 ---------- */

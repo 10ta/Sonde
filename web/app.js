@@ -122,8 +122,9 @@
     tip.style.top = `${e.clientY - 36}px`;
   };
   document.addEventListener('pointermove', (e) => {
-    const slot = e.target.closest?.('[data-tip]');
-    if (slot) { showTip(e, slot.dataset.tip); return; }
+    const ls = e.target.closest?.('svg[data-ls]');
+    document.querySelectorAll('svg[data-ls] line.cursor').forEach((l) => { if (l.ownerSVGElement !== ls) l.setAttribute('hidden', ''); });
+    if (ls && lineTip(ls, e)) return;
     const svg = e.target.closest?.('svg[data-chart]');
     document.querySelectorAll('svg[data-chart] line.cursor').forEach((l) => { if (!svg || l.ownerSVGElement !== svg) l.setAttribute('hidden', ''); });
     if (!svg) { tip.hidden = true; return; }
@@ -159,39 +160,20 @@
   // 2 × 2 的数字格
   const stats = (pairs) => `<dl class="stats">${pairs.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`).join('')}</dl>`;
 
-  // ---------- 卡片的三层：指标（进度条 + 近 7 天每日用量）→ 明细（引用块）→ 状态（普通行） ----------
+  // ---------- 卡片的三层：指标（进度条 + 近 7 天小折线）→ 明细（引用块）→ 状态（普通行） ----------
   // 明细 = 组成上面那个数的各部分（每个站点、每个数据库、账单里的每项服务…），只有这一层用引用块样式；
   // 状态 = 重置时间、日均可用、数据时间、提示。两层都是一项一行，放不下就省略号，点一下展开
   const ln = (h) => `<p class="ln">${tgHtml(h)}</p>`;
   const detailBlock = (lines) => (lines?.length ? `<blockquote class="bd">${lines.map(ln).join('')}</blockquote>` : '');
   const notesBlock = (lines) => (lines?.length ? `<div class="notes">${lines.map(ln).join('')}</div>` : '');
 
-  // ---------- 近 7 天每天用了多少（每条指标右边的 7 根小柱） ----------
-  // cycle（按月 / 账期累计的额度）：当天增加了多少，对比「均匀用完额度时每天该用多少」= 100% ÷ 周期天数；
-  // level（按天重置的用量、存储大小）：当天的最高值，对比上限 100%。
-  // 虚线 = 这条对比线；柱子超过它变橙色；没有数据的那天画斜纹。按 UTC 日期分天
+  // ---------- 每条指标右边的小折线：近 7 天的「滚动 24 小时用量」 ----------
+  // 每个整点一个点：从这一刻往前 24 小时一共用了多少（cycle 按月累计、daily 按天重置的用量都这样算，中途清零就从 0 重新累计）；
+  // size（存储大小）直接画大小本身。纵轴中心是 7 天的均值（浅色实线），上下对称，所以用量再小也看得出起伏。
+  // 虚线是对比线：cycle 是预算（均匀用完额度时每天该用多少 = 100% ÷ 周期天数），daily / size 是上限 100%；
+  // 对比线在纵轴范围外时贴着上 / 下边画，顶上一行写明倍数。线按每一段对比线的比例着色（和进度条同一套颜色），
+  // 没数据的地方断开，只留一条细点线
   const DAY = 86400;
-  const dayLabel = (d) => { const x = new Date(d * DAY * 1000); return `${x.getUTCMonth() + 1}.${x.getUTCDate()}`; };
-  function dailyUse(pts, kind) {
-    const today = Math.floor(nowSec() / DAY);
-    const byDay = new Map();
-    for (const [t, v] of pts || []) {
-      const d = Math.floor(t / DAY);
-      if (!byDay.has(d)) byDay.set(d, []);
-      byDay.get(d).push(v);
-    }
-    const out = [];
-    for (let d = today - 6; d <= today; d++) {
-      const vs = byDay.get(d);
-      if (!vs?.length) { out.push({ d, v: null }); continue; }
-      if (kind === 'level') { out.push({ d, v: Math.max(...vs) }); continue; }
-      const prev = byDay.get(d - 1);
-      let base = prev?.length ? prev[prev.length - 1] : vs[0], use = 0;
-      for (const v of vs) { use += v >= base ? v - base : v; base = v; }   // 变小了 = 中途重置过，从 0 重新算
-      out.push({ d, v: use, partial: !prev?.length });
-    }
-    return out;
-  }
   const UNIT_FMT = {
     GB: (v) => `${num(v, v < 100 ? 1 : 0)}GB`,
     B: (v) => (v >= 1e12 ? `${num(v / 1e12, 2)}TB` : v >= 1e9 ? `${num(v / 1e9, 2)}GB` : v >= 1e6 ? `${num(v / 1e6, 1)}MB` : v >= 1e3 ? `${num(v / 1e3, 0)}KB` : `${num(v, 0)}B`),
@@ -204,36 +186,110 @@
     if (m.unit === '次' || m.unit === '行') return `${UNIT_FMT.count(v)} ${m.unit}`;
     return `${v.toFixed(2)} ${m.unit || ''}`.trim();
   }
+  // 每小时的累计值 → 近 7 天每个整点的滚动 24 小时用量 [[t, v 或 null]]
+  function rolling(pts, kind) {
+    const x0 = nowSec() - 7 * DAY;
+    if (!pts?.length) return [];
+    if (kind === 'size') return pts.filter(([t]) => t >= x0);
+    const inc = [];   // 每个点相对上一个点增加了多少；隔了 3 小时以上算不出来（null）
+    for (let i = 1; i < pts.length; i++) {
+      const [t0, v0] = pts[i - 1], [t1, v1] = pts[i];
+      inc.push([t1, t1 - t0 > 3 * 3600 ? null : v1 >= v0 ? v1 - v0 : v1]);   // 变小了 = 中途重置过
+    }
+    const out = [];
+    let j = 0, sum = 0, bad = 0;
+    for (let i = 0; i < inc.length; i++) {
+      const [t, dv] = inc[i];
+      if (dv == null) bad++; else sum += dv;
+      while (inc[j][0] <= t - DAY) { if (inc[j][1] == null) bad--; else sum -= inc[j][1]; j++; }
+      if (t < x0) continue;
+      out.push([t, bad || t - DAY < pts[0][0] ? null : Math.max(0, sum)]);   // 不满 24 小时的数据不算
+    }
+    return out;
+  }
+  const ratioCls = (r) => (r < 0.5 ? 1 : r < 0.8 ? 2 : r < 1 ? 3 : r < 1.5 ? 4 : 5);
+  const times = (k) => (k >= 10 ? Math.round(k).toLocaleString('en-US') : k >= 1 ? num(k, 1) : num(k, 2));
+  const lines = new Map();   // svg id -> 悬停用的数据
   // m：{ kind, days, limit, unit }；pts：这条指标每小时的百分比
   function spark(pts, m) {
-    const kind = m.kind === 'level' ? 'level' : 'cycle';
-    const days = m.days > 0 ? m.days : 30.4;
-    const budget = kind === 'level' ? 100 : 100 / days;
-    const ds = dailyUse(pts, kind);
-    const hi = Math.max(budget, ...ds.map((x) => x.v || 0)) * 1.04;
-    const H = 30, W = 9, STEP = 11, y = (v) => H - (v / hi) * H;
-    const today = Math.floor(nowSec() / DAY);
-    const budgetTxt = kind === 'level'
-      ? `上限 ${num(100, 0)}%${m.limit ? `（${absText(100, m)}）` : ''}`
-      : `均匀用完每天 ${num(budget, 2)}%${m.limit ? `（${absText(budget, m)}）` : ''}`;
-    const slots = ds.map((x, i) => {
-      const x0 = i * STEP;
-      const when = x.d === today ? `今天（至今）` : dayLabel(x.d);
-      if (x.v == null) {
-        return `<rect class="nd" x="${x0}" y="0" width="${W}" height="${H}"/>`
-          + `<rect class="hit" x="${x0 - 1}" y="0" width="${STEP}" height="${H}" data-tip="${esc(`${when} 没有数据`)}"/>`;
-      }
-      const over = x.v > budget * 1.0001;
-      const h = x.v > 0 ? Math.max(1.5, H - y(x.v)) : 0;
-      const what = kind === 'level' ? '最高' : '用了';
-      const tipText = `${when} ${what} ${num(x.v, x.v < 1 ? 2 : 1)}%${m.limit ? `（${absText(x.v, m)}）` : ''} · ${budgetTxt}`
-        + (x.partial ? ' · 前一天没数据，只算了当天' : '');
-      return `<rect class="b${over ? ' over' : ''}${x.d === today ? ' today' : ''}" x="${x0}" y="${(H - h).toFixed(1)}" width="${W}" height="${h.toFixed(1)}"/>`
-        + `<rect class="hit" x="${x0 - 1}" y="0" width="${STEP}" height="${H}" data-tip="${esc(tipText)}"/>`;
-    }).join('');
-    const by = y(budget).toFixed(1);
-    return `<svg class="spk" viewBox="0 0 ${STEP * 7 - 2} ${H}" role="img" aria-label="近 7 天每天的${kind === 'level' ? '最高用量' : '用量'}">
-      ${slots}<line class="budget" x1="-1" x2="${STEP * 7 - 1}" y1="${by}" y2="${by}"/></svg>`;
+    const kind = ['daily', 'size'].includes(m.kind) ? m.kind : 'cycle';
+    const ref = kind === 'cycle' ? 100 / (m.days > 0 ? m.days : 30.4) : 100;
+    const refName = kind === 'cycle' ? '预算' : '上限';
+    const W = 96, TOP = 11, H = 38, ch = H - TOP;
+    const now = nowSec(), x0 = now - 7 * DAY;
+    const x = (t) => ((t - x0) / (7 * DAY)) * W;
+    const ps = rolling(pts, kind);
+    const vs = ps.filter((p) => p[1] != null).map((p) => p[1]);
+    const id = `l${++chartSeq}`;
+    if (!vs.length) {
+      return `<svg class="ls" viewBox="0 0 ${W} ${H}" role="img" aria-label="还没有足够的数据">
+        <text class="cap" x="${W}" y="8" text-anchor="end">数据不满 24 小时</text>
+        <line class="gap" x1="0" x2="${W}" y1="${H - 1}" y2="${H - 1}"/></svg>`;
+    }
+    const mean = vs.reduce((a, b) => a + b, 0) / vs.length;
+    const half = Math.max(Math.max(...vs.map((v) => Math.abs(v - mean))) * 1.15, mean * 0.08, ref * 1e-4);
+    const lo = mean - half, hi = mean + half;
+    const y = (v) => TOP + ch - ((v - lo) / (hi - lo)) * ch;
+    const last = vs[vs.length - 1];
+    let refLine, cap;
+    if (ref > hi) {
+      refLine = TOP; cap = last > 0 ? `▲ ${refName}是当前 ${times(ref / last)} 倍` : `▲ ${refName}在上方 · 当前 0`;
+    } else if (ref < lo) {
+      refLine = H - 0.5; cap = `▼ 当前是${refName} ${times(last / ref)} 倍`;
+    } else {
+      refLine = y(ref); cap = `当前是${refName} ${times(last / ref)} 倍`;
+    }
+    // 同一颜色的连续几段合成一条 path；没数据的地方断开
+    let out = '', run = null;
+    const flush = () => {
+      if (!run) return;
+      const d = run.pts.map(([px, py], i) => `${i ? 'L' : 'M'}${px.toFixed(1)},${py.toFixed(1)}`).join('');
+      const [fx] = run.pts[0], [lx] = run.pts[run.pts.length - 1];
+      out += `<path class="area s${run.c}" d="${d}L${lx.toFixed(1)},${H}L${fx.toFixed(1)},${H}Z"/><path class="seg s${run.c}" d="${d}"/>`;
+      run = null;
+    };
+    const gaps = [];
+    let gapFrom = x0;
+    for (let i = 0; i < ps.length; i++) {
+      const [t, v] = ps[i];
+      if (v == null) { flush(); if (gapFrom == null) gapFrom = ps[i - 1]?.[0] ?? x0; continue; }
+      if (gapFrom != null) { if (t - gapFrom > 1.5 * 3600) gaps.push([gapFrom, t]); gapFrom = null; }
+      const prev = ps[i - 1];
+      if (!prev || prev[1] == null) { flush(); run = { c: ratioCls(v / ref), pts: [[x(t), y(v)]] }; continue; }
+      const c = ratioCls(v / ref);
+      if (run && run.c !== c) { const p = run.pts[run.pts.length - 1]; flush(); run = { c, pts: [p] }; }
+      if (!run) run = { c, pts: [[x(prev[0]), y(prev[1])]] };
+      run.pts.push([x(t), y(v)]);
+    }
+    flush();
+    const lastT = ps[ps.length - 1][0];
+    if (gapFrom != null || now - lastT > 3 * 3600) gaps.push([gapFrom ?? lastT, now]);
+    lines.set(id, { ps, ref, refName, kind, m });
+    return `<svg class="ls" viewBox="0 0 ${W} ${H}" data-ls="${id}" role="img" aria-label="近 7 天${kind === 'size' ? '的大小' : '滚动 24 小时用量'}，${esc(cap)}">
+      <text class="cap" x="${W}" y="8" text-anchor="end">${esc(cap)}</text>
+      <line class="mid" x1="0" x2="${W}" y1="${(TOP + ch / 2).toFixed(1)}" y2="${(TOP + ch / 2).toFixed(1)}"/>
+      ${out}
+      ${gaps.map(([a, b]) => `<line class="gap" x1="${x(a).toFixed(1)}" x2="${x(b).toFixed(1)}" y1="${H - 1}" y2="${H - 1}"/>`).join('')}
+      <line class="ref${ref > hi || ref < lo ? ' out' : ''}" x1="0" x2="${W}" y1="${refLine.toFixed(1)}" y2="${refLine.toFixed(1)}"/>
+      <line class="cursor" x1="0" x2="0" y1="${TOP}" y2="${H}" hidden/></svg>`;
+  }
+  function lineTip(svg, e) {
+    const c = lines.get(svg.dataset.ls);
+    if (!c) return false;
+    const r = svg.getBoundingClientRect();
+    const now = nowSec(), t = now - 7 * DAY + ((e.clientX - r.left) / r.width) * 7 * DAY;
+    let best = null;
+    for (const p of c.ps) if (!best || Math.abs(p[0] - t) < Math.abs(best[0] - t)) best = p;
+    if (!best) return false;
+    const cur = svg.querySelector('line.cursor');
+    const cx = ((best[0] - (now - 7 * DAY)) / (7 * DAY)) * 96;
+    cur.setAttribute('x1', cx); cur.setAttribute('x2', cx); cur.removeAttribute('hidden');
+    const [bt, v] = best;
+    const pct = (p) => `${num(p, p < 1 ? 3 : 1)}%${c.m.limit ? `（${absText(p, c.m)}）` : ''}`;
+    const refTxt = c.kind === 'cycle' ? `预算 ${pct(c.ref)}/天` : `上限 ${pct(100)}`;
+    showTip(e, v == null ? `${fullTime(bt)} · 没有数据`
+      : `${fullTime(bt)} · ${c.kind === 'size' ? '大小' : '近 24 小时用了'} ${pct(v)} · ${refTxt} · ${times(v / c.ref)} 倍`);
+    return true;
   }
 
   // ---------- traffic-bot：每个来源一张卡（Cloudflare 按 CDN / D1 / Workers 拆成几张） ----------
@@ -264,7 +320,8 @@
   const tbTitle = (group, name, sub) =>
     `${group ? `<span class="grp">${esc(group)}</span>` : ''}${esc(name)}${sub ? `<span class="sub">${sub}</span>` : ''}`;
   // 旧版 bot 没给 kind：按天重置的（D1 读写、Workers 请求）和存储大小按 level 算，其余按月累计
-  const guessKind = (key) => (/:(workers|d1_read|d1_write|d1_storage|d1_db:.*|r2_storage)$/.test(key) ? 'level' : 'cycle');
+  // 没给 kind 的旧版 bot，以及上一版的 level（按天重置和存储大小没分开）：按指标名判断
+  const guessKind = (key) => (/:(d1_storage|d1_db:.*|r2_storage)$/.test(key) ? 'size' : /:(workers|d1_read|d1_write)$/.test(key) ? 'daily' : 'cycle');
   // 一条指标：第一行 名称 · 用量 / 总量 · 百分比，第二行 额度条；右边两行高的 7 根小柱
   const metricRow = (label, detail, pct, sparkSvg, marks = []) => `<div class="metric">
       <span class="metric-label" title="${esc(label)}">${esc(label)}</span>
@@ -284,7 +341,7 @@
       const isAlert = (m) => m.alert || !m.detail;
       const rows = ms.map((m) => (isAlert(m)
         ? (m.pct > 0 ? `<div class="alert-row"><span class="badge warn">提醒</span>${esc(m.label)}</div>` : '')
-        : metricRow(shortLabel(m.label), m.detail, m.pct, spark(hist[m.key], { ...m, kind: m.kind || guessKind(m.key) })))).join('');
+        : metricRow(shortLabel(m.label), m.detail, m.pct, spark(hist[m.key], { ...m, kind: ['cycle', 'daily', 'size'].includes(m.kind) ? m.kind : guessKind(m.key) })))).join('');
       let sub, rest;
       if (Array.isArray(p.detail) || Array.isArray(p.notes)) {
         sub = tgHtml(p.sub || '');
@@ -444,7 +501,7 @@
     const cols = Array.from({ length: n }, () => Object.assign(document.createElement('div'), { className: 'col' }));
     box.replaceChildren(...cols);
     cards.forEach((c) => cols[0].appendChild(c));             // 先放进同宽的一列里量高度
-    if (n === 1) return;
+    if (n === 1) { fitSubs(); return; }
     const hOf = new Map(cards.map((c) => [c, c.offsetHeight + GAP]));
     const total = cards.reduce((a, c) => a + hOf.get(c), 0);
     // 连续的同组卡片合成一组
@@ -462,6 +519,14 @@
       bins[k].push(...u); height[k] += sum(u);
     }
     bins.forEach((b, k) => b.sort((x, y) => x.dataset.i - y.dataset.i).forEach((c) => cols[k].appendChild(c)));
+    fitSubs();
+  }
+  // 卡头放不下时，副标题被挤得只剩一两个字就整段不显示（悬停卡名能看到）
+  function fitSubs() {
+    document.querySelectorAll('.card.tb h3 .sub').forEach((s) => {
+      s.hidden = false;
+      if (s.scrollWidth > s.clientWidth && s.clientWidth < 56) { s.hidden = true; s.closest('h3').title = s.textContent; }
+    });
   }
   let resizeTimer = 0, lastW = 0;
   window.addEventListener('resize', () => {
@@ -471,7 +536,7 @@
   document.fonts?.ready?.then(() => masonry());
 
   function render() {
-    charts.clear(); chartSeq = 0;
+    charts.clear(); lines.clear(); chartSeq = 0;
     const main = $('#main');
     if (!API) {
       main.innerHTML = `<div class="empty"><h2>还没有配置 API 地址</h2>
@@ -515,7 +580,7 @@
     } else {
       // 每张卡标上顺序和厂商，瀑布流按这两项分列
       html += `<div class="legend"><span><i class="lg-bar"></i>额度已用</span>
-        <span><i class="lg-spk"><b></b><b></b><b class="over"></b><b class="nd"></b></i>近 7 天每天的用量：虚线是均匀用完额度时每天该用的量（按天重置的是上限），超过变橙，斜纹是没数据</span>
+        <span><svg class="lg-ls" viewBox="0 0 30 14" aria-hidden="true"><line class="mid" x1="0" x2="30" y1="8" y2="8"/><line class="ref" x1="0" x2="30" y1="3" y2="3"/><path class="seg s1" d="M0,11L8,9L14,10L20,7"/><path class="seg s4" d="M20,7L26,3L30,1"/></svg>近 7 天每个整点往前 24 小时的用量（存储类为大小）：中间浅线是 7 天均值，虚线是预算（按天重置和存储类为上限），越接近 / 超过越偏橙红，断开是没数据</span>
         <span><i class="lg-bd"></i>明细：上面的数由哪几部分组成</span></div>`
         + `<div class="mason">${items.map((it, i) => it.html.replace('<article ', `<article data-i="${i}" data-g="${esc(it.group || '')}" `)).join('')}</div>`;
     }
