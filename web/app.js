@@ -77,45 +77,40 @@
     }).join('');
   }
 
-  // 额度行右侧的「近 7 天走势」小图：纵轴从 0 到 max(最高值, 10%)，用量很低的不会被放大成大起伏。数据不够（少于 6 个小时）或这几天几乎没变化（波动不到 1 个百分点）时不画：
-  // 一条贴着底的平线什么也说明不了，只会让每张卡看起来一样
-  function spark(pts, color) {
-    if (!pts || pts.length < 6) return '';
-    const vs = pts.map(([, v]) => clamp(v, 0, 100));
-    const lo = Math.min(...vs), hi = Math.max(...vs);
-    if (hi - lo < 1) return '';
-    const x0 = pts[0][0], x1 = pts[pts.length - 1][0];
-    const days = Math.max(1, Math.round((x1 - x0) / 86400));
-    return `<span class="spark-box" title="近 ${days} 天走势：${num(lo, 1)}% → ${num(vs[vs.length - 1], 1)}%（最高 ${num(hi, 1)}%）">
-      <svg class="spark" viewBox="0 0 64 18" preserveAspectRatio="none" aria-hidden="true">
-      <path d="${pathOf(pts.map(([t], i) => [t, vs[i]]), 64, 18, 0, Math.max(hi, 10), x0, x1)}" style="stroke:${color}"/></svg></span>`;
-  }
-
-  // 近 7 天曲线，悬停看每个小时的值（紧凑版：一行标题 + 44px 高的曲线，固定高度）
+  // 历史曲线（cfst 卡片用）：左边是纵坐标（上 / 中 / 下三个刻度），横轴只覆盖有数据的那段时间（最多 7 天），
+  // 悬停看每个小时的值。高度固定，卡片不会因为有没有数据而变高变矮
   function chart(pts, { label, unit = '', color = 'var(--accent-blue)', min = null, digits = 1 }) {
     const id = `c${++chartSeq}`;
     const H = 44;
     if (!pts || pts.length < 2) {
-      return `<div class="chart"><div class="chart-head"><span>${esc(label)} · 7 天</span><span>数据还不够</span></div><svg viewBox="0 0 300 ${H}"></svg></div>`;
+      return `<div class="chart"><div class="chart-head"><span>${esc(label)}</span><span>数据还不够</span></div>
+        <div class="chart-plot"><div class="y-axis"></div><svg viewBox="0 0 300 ${H}"></svg></div></div>`;
     }
     const vals = pts.map((p) => p[1]);
     let lo = min ?? Math.min(...vals), hi = Math.max(...vals);
     if (hi === lo) { hi += 1; lo = Math.max(min ?? -Infinity, lo - 1); }
     const pad = (hi - lo) * 0.08; hi += pad; if (min == null) lo -= pad;
-    const x1 = nowSec(), x0 = x1 - 7 * 86400;
+    const x1 = nowSec(), x0 = Math.max(x1 - 7 * 86400, pts[0][0]);
+    const spanH = (x1 - x0) / 3600;
+    const span = spanH < 48 ? `近 ${Math.max(1, Math.round(spanH))} 小时` : `近 ${Math.round(spanH / 24)} 天`;
     const line = pathOf(pts, 300, H, lo, hi, x0, x1);
     const firstX = (((pts[0][0] - x0) / (x1 - x0)) * 300).toFixed(1);
     const lastX = (((pts[pts.length - 1][0] - x0) / (x1 - x0)) * 300).toFixed(1);
     charts.set(id, { pts, unit, label, digits, lo, hi, x0, x1 });
-    const days = [1, 2, 3, 4, 5, 6].map((d) => `<line class="grid" x1="${d * 300 / 7}" x2="${d * 300 / 7}" y1="0" y2="${H}"/>`).join('');
+    const grid = [0.25, 0.5, 0.75].map((f) => `<line class="grid" x1="${f * 300}" x2="${f * 300}" y1="0" y2="${H}"/>`).join('')
+      + `<line class="grid" x1="0" x2="300" y1="${H / 2}" y2="${H / 2}"/>`;
+    const last = vals[vals.length - 1];
     return `<div class="chart">
-      <div class="chart-head"><span>${esc(label)}</span><span><b>${num(Math.min(...vals), digits)}</b>–<b>${num(Math.max(...vals), digits)}</b>${esc(unit)}</span></div>
-      <svg viewBox="0 0 300 ${H}" preserveAspectRatio="none" data-chart="${id}" role="img" aria-label="${esc(label)}近 7 天曲线">
-        ${days}
-        <path class="area" d="${line}L${lastX},${H}L${firstX},${H}Z" style="fill:${color}"/>
-        <path class="line" d="${line}" style="stroke:${color}"/>
-        <line class="cursor" x1="0" x2="0" y1="0" y2="${H}" hidden/>
-      </svg></div>`;
+      <div class="chart-head"><span>${esc(label)} · ${span}</span><span>当前 <b>${num(last, digits)}</b>${esc(unit)}</span></div>
+      <div class="chart-plot">
+        <div class="y-axis"><span>${num(hi, digits)}</span><span>${num((hi + lo) / 2, digits)}</span><span>${num(lo, digits)}</span></div>
+        <svg viewBox="0 0 300 ${H}" preserveAspectRatio="none" data-chart="${id}" role="img" aria-label="${esc(label)}${span}曲线">
+          ${grid}
+          <path class="area" d="${line}L${lastX},${H}L${firstX},${H}Z" style="fill:${color}"/>
+          <path class="line" d="${line}" style="stroke:${color}"/>
+          <line class="cursor" x1="0" x2="0" y1="0" y2="${H}" hidden/>
+        </svg>
+      </div></div>`;
   }
   const charts2 = (a, b) => `<div class="charts">${a}${b}</div>`;
 
@@ -168,8 +163,8 @@
     const first = h.match(/^<b>[^\n]*?<\/b>(?:\s*<i>([^\n]*?)<\/i>)?[^\n]*\n?/);
     if (first) { sub = first[1] || ''; h = h.slice(first[0].length); }
     h = h.replace(/^[^\n]*[▰▱][^\n]*\n└ <code>[^\n]*(\n|$)/gm, '')
-      .replace(/<\/?blockquote>/g, '\n')        // TG 的引用块在卡片里不用：说明行统一一种样式
-      .replace(/\n{2,}/g, '\n')
+      .replace(/<blockquote>\s*<\/blockquote>\n?/g, '')
+      .replace(/<blockquote>\s+/g, '<blockquote>').replace(/\s+<\/blockquote>/g, '</blockquote>')
       .replace(/^\s+|\s+$/g, '');
     return { sub: tgHtml(sub), body: h ? tgHtml(h) : '' };
   }
@@ -191,7 +186,7 @@
       <span class="metric-label" title="${esc(label)}">${esc(label)}</span>
       <span class="metric-detail num">${esc(detail)}</span>
       <span class="metric-pct num${pct >= 95 ? ' l5' : pct >= 80 ? ' l4' : ''}">${num(pct, 1)}%</span>
-      <div class="metric-bar">${bar(pct, marks)}${spark(spk, `var(--sig-${level(pct)})`)}</div>
+      <div class="metric-bar">${bar(pct, marks)}</div>
     </div>`;
 
   // traffic-bot：每个来源一张卡 → [{ group, html }]
@@ -298,9 +293,9 @@
       + line(failed ? '⚠️' : '💡', failed ? d.reason : d.why, failed ? 'bad' : '')
       + line('🆚', d.compare || (d.kind === 'failed' ? '' : '官方 / 种子对比在下一次复测榜单或全量扫描后更新'), 'muted')
       + top
-      + charts2(d.metric ? chart(hist.speed, { label: `${d.metric} MB/s`, color: 'var(--accent-green)', min: 0, digits: 2 })
+      + charts2(d.metric ? chart(hist.speed, { label: d.metric, unit: ' MB/s', color: 'var(--accent-green)', min: 0, digits: 2 })
                          : chart(hist.loss, { label: '丢包', color: 'var(--accent-green)', min: 0, digits: 2 }),
-                chart(hist.lat, { label: '延迟 ms', color: 'var(--accent-orange)', digits: 0 }))
+                chart(hist.lat, { label: '延迟', unit: ' ms', color: 'var(--accent-orange)', digits: 0 }))
       + line('🔎', d.scan, 'muted small')
       + line('⚙️', d.params, 'muted small');
     const badges = `<span class="badge ${kc}">${kl}</span>${d.peak ? '<span class="badge ink">晚高峰</span>' : ''}`;
@@ -352,10 +347,10 @@
   // ---------- 页面 ----------
   const state = { status: null, history: {}, error: '', loadedAt: 0 };
 
-  function section(title, note, cards, layout = 'grid', extra = '') {
+  function section(title, note, cards, layout = 'grid', extra = '', id = '') {
     if (!cards) return '';
     const cls = layout === 'raw' ? '' : layout === 'wide' ? 'grid grid-wide' : 'grid';
-    return `<section class="section"><div class="sec-head"><h2>${title}</h2><span class="sec-note">${note}</span>${extra}</div>
+    return `<section class="section${id ? ` sec-${id}` : ''}"><div class="sec-head"><h2>${title}</h2><span class="sec-note">${note}</span>${extra}</div>
       <div class="${cls}">${cards}</div></section>`;
   }
 
@@ -394,14 +389,15 @@
     let html = state.error ? `<div class="banner">刷新失败：${esc(state.error)}（显示的是上次的数据）</div>` : '';
     const quotaItems = [...tb.flatMap((s) => trafficItems(s, hist(s.source), cdt.length > 0)), ...cdt.map((s) => cdtItem(s, hist(s.source)))];
     html += section('额度', 'traffic-bot · cdt-guard · 各云的免费额度、账单与熔断', quotaItems.length ? quotaLayout(quotaItems) : '',
-      'raw', tb[0] ? ageBadge(tb[0]) : '');
-    html += section('优选 IP', 'cfst-ddns · 当前解析的节点与测速', cfst.map((s) => cfstCard(s, hist(s.source))).join(''), 'wide');
+      'raw', tb[0] ? ageBadge(tb[0]) : '', 'quota');
+    html += section('优选 IP', 'cfst-ddns · 当前解析的节点与测速', cfst.map((s) => cfstCard(s, hist(s.source))).join(''), 'wide', '', 'cfst');
     html += section('其他', '未识别的来源', other.map((s) => card(s, esc(s.source), '', `<pre class="tg">${esc(JSON.stringify(s.data, null, 2))}</pre>`)).join(''));
     if (!sources.length) {
       html = `<div class="empty"><h2>还没有任何上报</h2>
         <p>在 traffic-bot、cdt-guard、cfst-ddns 的配置里填上 <code>SONDE_URL</code> 和 <code>SONDE_TOKEN</code>，<br>它们下一次运行后就会出现在这里。</p></div>`;
     }
     main.innerHTML = html;
+    main.classList.toggle('split', !!(main.querySelector('.sec-quota') && main.querySelector('.sec-cfst')));
     layoutTraffic();
     $('#ft-updated').textContent = `更新于 ${fullTime(nowSec())}`;
   }
