@@ -191,10 +191,18 @@
     const x0 = nowSec() - 7 * DAY;
     if (!pts?.length) return [];
     if (kind === 'size') return pts.filter(([t]) => t >= x0);
-    const inc = [];   // 每个点相对上一个点增加了多少；隔了 3 小时以上算不出来（null）
+    // 每个点比之前的最高值多了多少；隔了 3 小时以上算不出来（null）。
+    // 只有掉到最高值的一半以下才算周期重置（新周期从 0 开始，这个点的值就是新用量）；
+    // 小幅回落是上游统计的抖动（比如 Oracle 按天聚合的窗口在挪，本月合计会忽高忽低几 GB），
+    // 记 0，回升到原来的最高值之前也不重复计入
+    const inc = [];
+    let peak = pts[0][1];
     for (let i = 1; i < pts.length; i++) {
-      const [t0, v0] = pts[i - 1], [t1, v1] = pts[i];
-      inc.push([t1, t1 - t0 > 3 * 3600 ? null : v1 >= v0 ? v1 - v0 : v1]);   // 变小了 = 中途重置过
+      const [t0] = pts[i - 1], [t1, v1] = pts[i];
+      if (t1 - t0 > 3 * 3600) { inc.push([t1, null]); peak = v1; continue; }
+      if (v1 >= peak) { inc.push([t1, v1 - peak]); peak = v1; }
+      else if (v1 < peak / 2) { inc.push([t1, v1]); peak = v1; }
+      else inc.push([t1, 0]);
     }
     const out = [];
     let j = 0, sum = 0, bad = 0;
