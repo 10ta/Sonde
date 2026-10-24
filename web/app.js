@@ -444,6 +444,61 @@
     return card(src, esc(d.label || src.source.split(':')[1] || 'cfst'), badges, body, foot, { cls: 'cfst' });
   }
 
+  // ---------- warp-keeper：每台机器一张卡 ----------
+  // 机房大字是出口（第一个通的栈）；四格是每个栈的延迟、24 小时可用率、账户；两条曲线是每个栈的延迟
+  // （只走一个栈时第二条是每小时通不通）
+  const WK_KIND = {
+    ok: ['ok', '正常'], recovered: ['info', '已恢复'], init: ['info', '已部署'], renewed: ['info', '已换号'],
+    plus: ['info', '升级 WARP+'], failed: ['bad', '不可用'], sbdown: ['bad', 'sing-box 未运行'], netdown: ['warn', '本机断网'],
+  };
+  const WK_GOOD = new Set(['ok', 'recovered', 'init', 'renewed', 'plus']);
+  const upPct = (u) => (u && u.n > 0 ? (u.ok / u.n) * 100 : null);
+  const upText = (u) => (u && u.n > 0 ? `${num(upPct(u), 1)}%` : '–');
+  // 每小时一个 0/1（那个小时最后一次检查通没通）→ 每个整点往前 24 小时的可用率 %
+  const rollingUp = (pts) => (pts || []).map(([t], i, a) => {
+    const win = a.filter(([x]) => x > t - DAY && x <= t);
+    return [t, (win.reduce((n, [, v]) => n + (v > 0 ? 1 : 0), 0) / win.length) * 100];
+  });
+  function warpCard(src, hist) {
+    const d = src.data || {};
+    const [kc, kl] = WK_KIND[d.kind] || ['ink', d.kind || '?'];
+    const good = WK_GOOD.has(d.kind);
+    const st = (d.stacks || []).slice(0, 2);
+    const live = st.find((s) => s.warp === 'on' || s.warp === 'plus');
+    const cell = (s) => [s.stack, s.warp === 'on' || s.warp === 'plus'
+      ? `<span class="num">${num(s.rtt, 0)}</span> <small>ms · ${esc(s.colo || '?')}</small>`
+      : `<span class="num">${s.warp === 'off' ? '未走 WARP' : '不通'}</span>`];
+    const u24 = upPct(d.up24);
+    const cells = [
+      ...st.map(cell),
+      ['24 小时可用', `<span class="num${u24 != null && u24 < 95 ? ' bad-t' : ''}">${upText(d.up24)}</span> <small>${d.up24?.n ? `${esc(d.up24.ok)}/${esc(d.up24.n)}` : ''}</small>`],
+      ['账户', `${esc(d.account || '?')} <small>${num(d.account_days, 0)} 天</small>`],
+    ];
+    if (st.length < 2) cells.splice(1, 0, ['上次故障', `<span class="num">${d.last_fail ? esc(ago(d.last_fail)) : '近 8 天无'}</span>`]);
+    const hero = `<div class="hero">
+        <div class="big colo"><b>${esc(live?.colo || '–')}</b><span>${live ? `出口${live.loc ? `<br>${esc(live.loc)}` : ''}` : '没有出口'}</span></div>
+        ${stats(cells.slice(0, 4))}
+      </div>`;
+    const renew = `自动换号 ${num(d.renews, 0)} 次${d.renews ? `（上次 ${ago(d.last_renew)}）` : ''} · 重载 ${num(d.reloads, 0)} 次`
+      + (st.length < 2 ? '' : ` · 上次故障 ${d.last_fail ? ago(d.last_fail) : '近 8 天没有'}`);   // 单栈时这项在数字格里
+    const down = !good && d.fail_since ? `（已持续 ${ago(d.fail_since).replace(/ ?前$/, '')}）` : '';
+    const [c1, c2] = st.length >= 2
+      ? [chart(hist.rtt4, { label: 'IPv4 延迟', unit: ' ms', color: 'var(--accent-orange)', digits: 0 }),
+         chart(hist.rtt6, { label: 'IPv6 延迟', unit: ' ms', color: 'var(--accent-blue)', digits: 0 })]
+      : [chart(st[0]?.stack === 'IPv6' ? hist.rtt6 : hist.rtt4, { label: '延迟', unit: ' ms', color: 'var(--accent-orange)', digits: 0 }),
+         chart(rollingUp(hist.up), { label: '24 小时可用率', unit: '%', color: 'var(--accent-green)', digits: 1 })];
+    const body = hero
+      + (good ? line('🛠', d.action || d.note || '无需处理', d.action ? '' : 'muted')
+              : line('⚠️', `${d.reason || '不可用'}${down}`, 'bad'))
+      + line(good ? '📈' : '🛠', good ? `7 天可用率 ${upText(d.up7)}${d.up7?.n ? `（${d.up7.ok}/${d.up7.n} 次检查）` : ''}${st.length < 2 && st[0] ? ` · 只走 ${st[0].stack}` : ''}`
+        : (d.action || d.note || '等下一次检查'), 'muted')
+      + line('🔁', renew, 'muted small')
+      + charts2(c1, c2);
+    const badges = `<span class="badge ${kc}">${esc(kl)}</span>`;
+    const foot = `<span>${esc(d.host || '')}${d.singbox ? ` · sing-box ${esc(d.singbox)}` : ''}</span><span>MTU ${esc(d.mtu ?? '?')} · v${esc(d.version || '?')}</span>`;
+    return card(src, tbTitle('Cloudflare', 'WARP', esc(d.name || src.source.split(':')[1] || '')), badges, body, foot, { cls: 'tb cfst warp' });
+  }
+
   // ---------- 账单汇总（顶部两格） ----------
   // 来源：traffic-bot 上报的 AWS（CloudWatch 预估账单，按 UTC 自然月）、cdt-guard 的阿里云费用（按北京时间自然月）。
   // 预计月底 = 已产生 ÷ 本月已过去的比例（线性外推）；月初第一天数据太少，不外推
@@ -553,7 +608,8 @@
     const cdt = by((id) => id === 'cdt-guard');
     const tb = by((id) => id === 'traffic-bot');
     const cfst = by((id) => id.startsWith('cfst-ddns:'));
-    const known = new Set([...cdt, ...tb, ...cfst]);
+    const warp = by((id) => id.startsWith('warp-keeper:'));
+    const known = new Set([...cdt, ...tb, ...cfst, ...warp]);
     const other = sources.filter((s) => !known.has(s));
 
     // 统计条
@@ -572,11 +628,12 @@
       ...tb.flatMap((s) => trafficItems(s, hist(s.source), cdt.length > 0)),
       ...cdt.map((s) => cdtItem(s, hist(s.source))),
       ...cfst.map((s) => ({ group: '', html: cfstCard(s, hist(s.source)) })),
+      ...warp.map((s) => ({ group: 'WARP', html: warpCard(s, hist(s.source)) })),
       ...other.map((s) => ({ group: '', html: card(s, esc(s.source), '<span class="badge ink">未识别</span>', `<pre class="tg">${esc(JSON.stringify(s.data, null, 2))}</pre>`) })),
     ];
     if (!sources.length) {
       html = `<div class="empty"><h2>还没有任何上报</h2>
-        <p>在 traffic-bot、cdt-guard、cfst-ddns 的配置里填上 <code>SONDE_URL</code> 和 <code>SONDE_TOKEN</code>，<br>它们下一次运行后就会出现在这里。</p></div>`;
+        <p>在 traffic-bot、cdt-guard、cfst-ddns、warp-keeper 的配置里填上 <code>SONDE_URL</code> 和 <code>SONDE_TOKEN</code>，<br>它们下一次运行后就会出现在这里。</p></div>`;
     } else {
       // 每张卡标上顺序和厂商，瀑布流按这两项分列
       html += `<div class="legend"><span><i class="lg-bar"></i>额度已用</span>

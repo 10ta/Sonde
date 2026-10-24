@@ -1,6 +1,6 @@
 # Sonde
 
-像探针一样展示几个自用工具上报的状态：**traffic-bot**（各云免费额度与账单）、**cdt-guard**（阿里云 CDT 流量 / 费用熔断）、**cfst-ddns**（优选 IP 的机房与测速）。主题沿用 [komari-theme-1999-fork](https://github.com/10ta/komari-theme-1999-fork)。
+像探针一样展示几个自用工具上报的状态：**traffic-bot**（各云免费额度与账单）、**cdt-guard**（阿里云 CDT 流量 / 费用熔断）、**cfst-ddns**（优选 IP 的机房与测速）、**warp-keeper**（各台机器 sing-box 的 WARP 出口健康度）。主题沿用 [komari-theme-1999-fork](https://github.com/10ta/komari-theme-1999-fork)。
 
 ![preview](docs/preview.png)
 
@@ -11,6 +11,7 @@
   - 每项一行，放不下显示省略号，点一下展开
 - 所有卡片（额度和优选 IP）进同一个瀑布流：列宽不小于 360px，页面越宽列越多，卡片不会被拉宽；每张卡放进当前最矮的一列，同一厂商的几张（Cloudflare 的 CDN / D1 / Workers）尽量排在同一列。没有实例的来源（比如 Lightsail 没开机器、R2 没有存储桶）不显示
 - 优选 IP 卡片：机房、测速、榜单（固定 5 行）、7 天曲线（悬停看每小时的值）
+- WARP 卡片（每台机器一张）：出口机房和国家、每个栈（IPv4 / IPv6）的延迟、24 小时和 7 天可用率、账户（WARP / WARP+）和使用天数、上次做了什么自愈（重载 / 换号）、换号和重载次数、上次故障；两条 7 天曲线是每个栈的延迟（只走一个栈时第二条是滚动 24 小时可用率）
 - 页面每 30 秒读一次最新数据（切回页面时立即补读）。数据是各工具上次上报的结果，页面不能让工具重新测速，所以没有「刷新」按钮
 - 来源超过两个上报周期没动静就标成**离线**（比如 cdt-guard 停了，一眼能看到）
 - 19 套配色（与 1999 主题相同），手机可用；可以部署在子路径下
@@ -18,9 +19,10 @@
 ## 怎么工作
 
 ```
-cdt-guard ─┐   每次运行后 POST 一份 JSON
-traffic-bot├────────────────────────────▶  Worker  /ingest  ──▶  D1（每个来源最新一份 + 8 天每小时历史）
-cfst-ddns ─┘   带上报密钥；失败只记日志               │
+cdt-guard  ─┐   每次运行后 POST 一份 JSON
+traffic-bot ├───────────────────────────▶  Worker  /ingest  ──▶  D1（每个来源最新一份 + 8 天每小时历史）
+cfst-ddns   │   带上报密钥；失败只记日志               │
+warp-keeper─┘
                                                       ▼
                   CF Pages 页面 ┐                /api/status、/api/history
                   Vercel 页面   ┘── 同一份纯静态网页 ──┘
@@ -42,7 +44,7 @@ update.sh 日常更新（和其他项目同一套约定）
 
 需要：Node.js 20+、`git`、`curl`，一个 Cloudflare 账号。在你自己的电脑或 Debian 服务器上操作都可以（以后更新也在同一台机器上）。
 
-> ⚠️ **影响范围**：会在 Cloudflare 账户里新建一个 Worker（`sonde`）和一个 D1 数据库（`sonde`）。请求计入账户共享的每日 10 万次 Worker 请求额度——三个工具每天合计几百次上报，加上打开网页时每 30 秒一次读取。
+> ⚠️ **影响范围**：会在 Cloudflare 账户里新建一个 Worker（`sonde`）和一个 D1 数据库（`sonde`）。请求计入账户共享的每日 10 万次 Worker 请求额度——这几个工具每天合计几百次上报，加上打开网页时每 30 秒一次读取。
 
 ### 1. 部署 API（Worker + D1）
 
@@ -95,9 +97,9 @@ git add worker/wrangler.toml web/config.js && git commit -m "config: deploy" && 
 - **子路径**：页面全部用相对路径，放在 `https://example.com/sonde/` 之类的子路径下也能用（比如用自己服务器的 Caddy 托管 `web/` 目录）。
 - 临时换 API：网址后加 `?api=https://...`。
 
-### 3. 接入三个工具
+### 3. 接入各个工具
 
-这三个工具在 [scripts-de-moi](https://github.com/10ta/scripts-de-moi) 里，上报功能默认关闭。把 `./init.sh` 最后打印的两行加进各自的配置文件：
+这几个工具都在 [scripts-de-moi](https://github.com/10ta/scripts-de-moi) 里，上报功能默认关闭。把 `./init.sh` 最后打印的两行加进各自的配置文件：
 
 ```bash
 SONDE_URL=https://sonde-api.example.com
@@ -109,8 +111,9 @@ SONDE_TOKEN=<.sonde.env 里的 INGEST_TOKEN>
 | traffic-bot | `/etc/traffic-bot.env` | `systemctl restart traffic-bot` | 启动 15 秒后一次；之后每次告警检查（默认 10 分钟）、`/check`、定时播报 |
 | cdt-guard | `/etc/cdt-guard.env` | 下一次检查（5 分钟内） | 每次检查 |
 | cfst-ddns | `/etc/cfst-ddns.env` | 下一次测速 | 每次真正测速后（不到时间的空转不报）；巡检只测当前 IP，卡片沿用上次复测 / 全量扫描的榜单 |
+| warp-keeper | `/etc/warp-keeper.env` | 下一次检查（1 小时内），或手动 `warp-keeper check` | 每次检查（每小时）和 `init` / `renew` / `plus` 之后；来源名 `warp-keeper:<WARP_NAME>`，每台机器一张卡 |
 
-先把三个工具更新到带上报功能的版本：在 scripts-de-moi 里 `sudo ./update.sh`。上报失败（网络不通、密钥不对）只会在日志里留一行警告，不影响它们本来的工作。
+先把这些工具更新到带上报功能的版本：在 scripts-de-moi 里 `sudo ./update.sh`。上报失败（网络不通、密钥不对）只会在日志里留一行警告，不影响它们本来的工作。
 
 装了 cdt-guard 时，traffic-bot 卡片里的「Aliyun CDT」会被隐藏，以 cdt-guard 自己那张更详细的卡片为准。
 
@@ -123,9 +126,9 @@ SONDE_TOKEN=<.sonde.env 里的 INGEST_TOKEN>
 
 和其他项目的 `update.sh` 规则相同：有未提交的改动或本地和远端分叉时直接退出，不提问。
 
-**换上报密钥**：`./init.sh --new-token`，然后把三个工具配置里的 `SONDE_TOKEN` 都改掉（旧密钥立即失效）。
+**换上报密钥**：`./init.sh --new-token`，然后把各个工具配置里的 `SONDE_TOKEN` 都改掉（旧密钥立即失效）。
 
-**删掉不再用的来源**（比如 cfst-ddns 去掉了一个目标）：
+**删掉不再用的来源**（比如 cfst-ddns 去掉了一个目标、一台机器不再跑 warp-keeper）：
 
 ```bash
 source .sonde.env
@@ -141,7 +144,7 @@ curl -X DELETE "$PUBLIC_URL/ingest/cfst-ddns:fastly" -H "Authorization: Bearer $
 | `GET` | `/api/status` | 每个来源最新的一份，公开 |
 | `GET` | `/api/history` | 近 8 天每小时的指标值（`series` 里的数字），公开，边缘缓存 5 分钟。多留的 1 天给「近 7 天每天的用量」的第一天当起点 |
 
-- `source`：小写字母、数字和 `:_-`，如 `traffic-bot`、`cdt-guard`、`cfst-ddns:cloudflare`
+- `source`：小写字母、数字和 `:_-`，如 `traffic-bot`、`cdt-guard`、`cfst-ddns:cloudflare`、`warp-keeper:bwh-la`
 - `interval`：上报方声明的上报间隔（秒），超过两倍间隔加 2 分钟没收到新的就算离线
 - `series`：`{指标名: 数值}`，每小时只留最后一个值，用来画曲线和每天的用量
 - 网页按 `source` 识别卡片类型；不认识的来源会出现在「其他」里，显示原始 JSON

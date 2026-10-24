@@ -206,6 +206,7 @@ button { font: inherit; color: inherit; }
 .line .ic { display: inline-block; width: 1.35em; }
 .line.small { font-size: 0.7rem; }
 .line.bad { color: var(--sig-text-5); font-weight: 700; }
+.stats .bad-t { color: var(--sig-text-5); }   /* WARP 卡：24 小时可用率低于 95% */
 .note { font-size: 0.8rem; line-height: 1.45; overflow-wrap: anywhere; }
 .note.bad { color: var(--sig-text-5); font-weight: 700; }
 .alert-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.78rem; font-weight: 700; }
