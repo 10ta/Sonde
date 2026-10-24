@@ -169,7 +169,7 @@
 
   // ---------- 每条指标右边的小折线：近 7 天的「滚动 24 小时用量」 ----------
   // 每个整点一个点：从这一刻往前 24 小时一共用了多少（cycle 按月累计、daily 按天重置的用量都这样算，中途清零就从 0 重新累计）；
-  // size（存储大小）直接画大小本身。纵轴中心是 7 天的均值（浅色实线），上下对称，所以用量再小也看得出起伏。
+  // size（存储大小）、gauge（即时值，如各 Worker 的 CPU P90）直接画值本身。纵轴中心是 7 天的均值（浅色实线），上下对称，所以用量再小也看得出起伏。
   // 虚线是对比线：cycle 是预算（均匀用完额度时每天该用多少 = 100% ÷ 周期天数），daily / size 是上限 100%；
   // 对比线在纵轴范围外时贴着上 / 下边画，顶上一行写明倍数。线按每一段对比线的比例着色（和进度条同一套颜色），
   // 没数据的地方断开，只留一条细点线
@@ -184,13 +184,14 @@
     const v = (pct / 100) * m.limit;
     if (m.unit === 'GB' || m.unit === 'B') return UNIT_FMT[m.unit](v);
     if (m.unit === '次' || m.unit === '行') return `${UNIT_FMT.count(v)} ${m.unit}`;
+    if (m.unit === 'ms') return `${num(v, 1)}ms`;
     return `${v.toFixed(2)} ${m.unit || ''}`.trim();
   }
   // 每小时的累计值 → 近 7 天每个整点的滚动 24 小时用量 [[t, v 或 null]]
   function rolling(pts, kind) {
     const x0 = nowSec() - 7 * DAY;
     if (!pts?.length) return [];
-    if (kind === 'size') return pts.filter(([t]) => t >= x0);
+    if (kind === 'size' || kind === 'gauge') return pts.filter(([t]) => t >= x0);
     // 每个点比之前的最高值多了多少；隔了 3 小时以上算不出来（null）。
     // 只有掉到最高值的一半以下才算周期重置（新周期从 0 开始，这个点的值就是新用量）；
     // 小幅回落是上游统计的抖动（比如 Oracle 按天聚合的窗口在挪，本月合计会忽高忽低几 GB），
@@ -220,7 +221,7 @@
   const lines = new Map();   // svg id -> 悬停用的数据
   // m：{ kind, days, limit, unit }；pts：这条指标每小时的百分比
   function spark(pts, m) {
-    const kind = ['daily', 'size'].includes(m.kind) ? m.kind : 'cycle';
+    const kind = ['daily', 'size', 'gauge'].includes(m.kind) ? m.kind : 'cycle';
     const ref = kind === 'cycle' ? 100 / (m.days > 0 ? m.days : 30.4) : 100;
     const refName = kind === 'cycle' ? '预算' : '上限';
     const W = 96, TOP = 11, H = 38, ch = H - TOP;
@@ -273,7 +274,7 @@
     const lastT = ps[ps.length - 1][0];
     if (gapFrom != null || now - lastT > 3 * 3600) gaps.push([gapFrom ?? lastT, now]);
     lines.set(id, { ps, ref, refName, kind, m });
-    return `<svg class="ls" viewBox="0 0 ${W} ${H}" data-ls="${id}" role="img" aria-label="近 7 天${kind === 'size' ? '的大小' : '滚动 24 小时用量'}，${esc(cap)}">
+    return `<svg class="ls" viewBox="0 0 ${W} ${H}" data-ls="${id}" role="img" aria-label="近 7 天${kind === 'size' ? '的大小' : kind === 'gauge' ? '的变化' : '滚动 24 小时用量'}，${esc(cap)}">
       <text class="cap" x="${W}" y="8" text-anchor="end">${esc(cap)}</text>
       <line class="mid" x1="0" x2="${W}" y1="${(TOP + ch / 2).toFixed(1)}" y2="${(TOP + ch / 2).toFixed(1)}"/>
       ${out}
@@ -296,7 +297,7 @@
     const pct = (p) => `${num(p, p < 1 ? 3 : 1)}%${c.m.limit ? `（${absText(p, c.m)}）` : ''}`;
     const refTxt = c.kind === 'cycle' ? `预算 ${pct(c.ref)}/天` : `上限 ${pct(100)}`;
     showTip(e, v == null ? `${fullTime(bt)} · 没有数据`
-      : `${fullTime(bt)} · ${c.kind === 'size' ? '大小' : '近 24 小时用了'} ${pct(v)} · ${refTxt} · ${times(v / c.ref)} 倍`);
+      : `${fullTime(bt)} · ${c.kind === 'size' ? '大小' : c.kind === 'gauge' ? '当时' : '近 24 小时用了'} ${pct(v)} · ${refTxt} · ${times(v / c.ref)} 倍`);
     return true;
   }
 
@@ -329,7 +330,7 @@
     `${group ? `<span class="grp">${esc(group)}</span>` : ''}${esc(name)}${sub ? `<span class="sub">${sub}</span>` : ''}`;
   // 旧版 bot 没给 kind：按天重置的（D1 读写、Workers 请求）和存储大小按 level 算，其余按月累计
   // 没给 kind 的旧版 bot，以及上一版的 level（按天重置和存储大小没分开）：按指标名判断
-  const guessKind = (key) => (/:(d1_storage|d1_db:.*|r2_storage)$/.test(key) ? 'size' : /:(workers|d1_read|d1_write)$/.test(key) ? 'daily' : 'cycle');
+  const guessKind = (key) => (/:cpu:/.test(key) ? 'gauge' : /:(d1_storage|d1_db:.*|r2_storage)$/.test(key) ? 'size' : /:(workers|d1_read|d1_write)$/.test(key) ? 'daily' : 'cycle');
   // 一条指标：第一行 名称 · 用量 / 总量 · 百分比，第二行 额度条；右边两行高的 7 根小柱
   const metricRow = (label, detail, pct, sparkSvg, marks = []) => `<div class="metric">
       <span class="metric-label" title="${esc(label)}">${esc(label)}</span>
@@ -349,7 +350,7 @@
       const isAlert = (m) => m.alert || !m.detail;
       const rows = ms.map((m) => (isAlert(m)
         ? (m.pct > 0 ? `<div class="alert-row"><span class="badge warn">提醒</span>${esc(m.label)}</div>` : '')
-        : metricRow(shortLabel(m.label), m.detail, m.pct, spark(hist[m.key], { ...m, kind: ['cycle', 'daily', 'size'].includes(m.kind) ? m.kind : guessKind(m.key) })))).join('');
+        : metricRow(shortLabel(m.label), m.detail, m.pct, spark(hist[m.key], { ...m, kind: ['cycle', 'daily', 'size', 'gauge'].includes(m.kind) ? m.kind : guessKind(m.key) })))).join('');
       let sub, rest;
       if (Array.isArray(p.detail) || Array.isArray(p.notes)) {
         sub = tgHtml(p.sub || '');
@@ -648,7 +649,7 @@
     } else {
       // 每张卡标上顺序和厂商，瀑布流按这两项分列
       html += `<div class="legend"><span><i class="lg-bar"></i>额度已用</span>
-        <span><svg class="lg-ls" viewBox="0 0 30 14" aria-hidden="true"><line class="mid" x1="0" x2="30" y1="8" y2="8"/><line class="ref" x1="0" x2="30" y1="3" y2="3"/><path class="seg s1" d="M0,11L8,9L14,10L20,7"/><path class="seg s4" d="M20,7L26,3L30,1"/></svg>近 7 天每个整点往前 24 小时的用量（存储类为大小）：中间浅线是 7 天均值，虚线是预算（按天重置和存储类为上限），越接近 / 超过越偏橙红，断开是没数据</span>
+        <span><svg class="lg-ls" viewBox="0 0 30 14" aria-hidden="true"><line class="mid" x1="0" x2="30" y1="8" y2="8"/><line class="ref" x1="0" x2="30" y1="3" y2="3"/><path class="seg s1" d="M0,11L8,9L14,10L20,7"/><path class="seg s4" d="M20,7L26,3L30,1"/></svg>近 7 天每个整点往前 24 小时的用量（存储类为大小，CPU 为 P90）：中间浅线是 7 天均值，虚线是预算（按天重置、存储类和 CPU 为上限），越接近 / 超过越偏橙红，断开是没数据</span>
         <span><i class="lg-bd"></i>明细：上面的数由哪几部分组成</span></div>`
         + `<div class="mason">${items.map((it, i) => it.html.replace('<article ', `<article data-i="${i}" data-g="${esc(it.group || '')}" `)).join('')}</div>`;
     }
