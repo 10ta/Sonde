@@ -206,7 +206,32 @@ button { font: inherit; color: inherit; }
 .line .ic { display: inline-block; width: 1.35em; }
 .line.small { font-size: 0.7rem; }
 .line.bad { color: var(--sig-text-5); font-weight: 700; }
-.stats .bad-t { color: var(--sig-text-5); }   /* WARP 卡：24 小时可用率低于 95% */
+/* WARP 卡：所有机器一张卡，每台一块 */
+.card.warp .card-body { padding-top: 0.15rem; padding-bottom: 0.15rem; }
+.wk { padding: 0.5rem 0; border-bottom: 2px solid var(--line); }
+.wk:last-child { border-bottom: none; }
+.wk.is-off { opacity: 0.6; }
+.wk-l1, .wk-l2 { display: flex; align-items: center; gap: 0.45rem; min-width: 0; white-space: nowrap; }
+.wk-l2 { margin: 0.25rem 0 0.15rem; }
+.wk-dot { width: 0.7rem; height: 0.7rem; border: 2px solid var(--line); flex-shrink: 0; background: var(--card-bg); }
+.wk-dot.ok { background: var(--sig-1); } .wk-dot.info { background: var(--accent-blue); }
+.wk-dot.bad { background: var(--accent-red); } .wk-dot.warn { background: var(--sig-4); }
+.wk-dot.off { background: repeating-linear-gradient(-45deg, var(--card-bg) 0 2px, var(--hatch) 2px 4px); }
+.wk-name { font-size: 0.95rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.wk-tag { font: 700 0.6rem 'Space Grotesk', sans-serif; letter-spacing: 0.06em; padding: 0.05rem 0.3rem; background: var(--accent-blue); color: #fff; flex-shrink: 0; }
+.wk-word { font-size: 0.7rem; font-weight: 700; flex-shrink: 0; }
+.wk-word.bad { color: var(--sig-text-5); } .wk-word.warn { color: var(--sig-text-4, var(--sig-text-5)); }
+.wk-word.info, .wk-word.off { color: var(--text-muted); }
+.wk-exit { margin-left: auto; font-family: 'Archivo Black', sans-serif; font-size: 1rem; flex-shrink: 0; }
+.wk-exit small { font-family: 'Space Grotesk', sans-serif; font-size: 0.7rem; color: var(--text-muted); }
+.wk-st { font-size: 0.85rem; flex-shrink: 0; }
+.wk-st small { font-size: 0.62rem; font-weight: 700; color: var(--text-muted); letter-spacing: 0.04em; }
+.wk-sp { flex: 1 1 auto; }
+.wk-strip { display: inline-flex; gap: 1px; flex-shrink: 1; min-width: 0; overflow: hidden; }
+.wk-strip i { width: 4px; height: 14px; background: var(--hatch); flex-shrink: 0; }
+.wk-strip i.up { background: var(--sig-1); } .wk-strip i.down { background: var(--accent-red); }
+.wk-pct { font-size: 0.85rem; min-width: 3.3em; text-align: right; flex-shrink: 0; }
+.bad-t { color: var(--sig-text-5); }
 .note { font-size: 0.8rem; line-height: 1.45; overflow-wrap: anywhere; }
 .note.bad { color: var(--sig-text-5); font-weight: 700; }
 .alert-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.78rem; font-weight: 700; }

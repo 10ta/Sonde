@@ -444,59 +444,62 @@
     return card(src, esc(d.label || src.source.split(':')[1] || 'cfst'), badges, body, foot, { cls: 'cfst' });
   }
 
-  // ---------- warp-keeper：每台机器一张卡 ----------
-  // 机房大字是出口（第一个通的栈）；四格是每个栈的延迟、24 小时可用率、账户；两条曲线是每个栈的延迟
-  // （只走一个栈时第二条是每小时通不通）
-  const WK_KIND = {
-    ok: ['ok', '正常'], recovered: ['info', '已恢复'], init: ['info', '已部署'], renewed: ['info', '已换号'],
-    plus: ['info', '升级 WARP+'], failed: ['bad', '不可用'], sbdown: ['bad', 'sing-box 未运行'], netdown: ['warn', '本机断网'],
+  // ---------- warp-keeper：所有机器汇总在同一张卡里，每台一块 ----------
+  // 第一行：状态点 · 名字 · 账户 ……… 出口机房 · 国家
+  // 第二行：每个栈的延迟 ……… 近 24 小时每小时一格（绿 = 通、红 = 不通、空 = 没数据）· 24 小时可用率
+  // 第三行：7 天可用率 · 换号 · 账户天数 · 上报时间；有问题或刚做过自愈时再多一行原因 / 动作
+  // 有问题的排在前面
+  const WK = {
+    ok: ['ok', ''], recovered: ['info', '已恢复'], init: ['info', '已部署'], renewed: ['info', '已换号'], plus: ['info', '升级 WARP+'],
+    failed: ['bad', '不可用'], sbdown: ['bad', '代理没在运行'], netdown: ['warn', '本机断网'],
   };
   const WK_GOOD = new Set(['ok', 'recovered', 'init', 'renewed', 'plus']);
-  const upPct = (u) => (u && u.n > 0 ? (u.ok / u.n) * 100 : null);
-  const upText = (u) => (u && u.n > 0 ? `${num(upPct(u), 1)}%` : '–');
-  // 每小时一个 0/1（那个小时最后一次检查通没通）→ 每个整点往前 24 小时的可用率 %
-  const rollingUp = (pts) => (pts || []).map(([t], i, a) => {
-    const win = a.filter(([x]) => x > t - DAY && x <= t);
-    return [t, (win.reduce((n, [, v]) => n + (v > 0 ? 1 : 0), 0) / win.length) * 100];
-  });
-  function warpCard(src, hist) {
+  const upText = (u) => (u && u.n > 0 ? `${num((u.ok / u.n) * 100, 1)}%` : '–');
+  const HOUR = 3600;
+  function upStrip(pts) {   // 近 24 小时，每小时一格
+    const by = new Map((pts || []).map(([t, v]) => [Math.floor(t / HOUR), v]));
+    const h0 = Math.floor(nowSec() / HOUR) - 23;
+    return `<span class="wk-strip" aria-label="近 24 小时每小时是否正常">${Array.from({ length: 24 }, (_, i) => {
+      const v = by.get(h0 + i);
+      const cls = v == null ? '' : v > 0 ? ' up' : ' down';
+      return `<i class="${cls.trim()}" title="${esc(fullTime((h0 + i) * HOUR))} ${v == null ? '没有数据' : v > 0 ? '正常' : '不通'}"></i>`;
+    }).join('')}</span>`;
+  }
+  function warpRow(src, hist) {
     const d = src.data || {};
-    const [kc, kl] = WK_KIND[d.kind] || ['ink', d.kind || '?'];
+    const off = isOffline(src);
     const good = WK_GOOD.has(d.kind);
+    const [cls, word] = off ? ['off', `离线 · ${ago(src.ts)}`] : (WK[d.kind] || ['ink', d.kind || '?']);
     const st = (d.stacks || []).slice(0, 2);
-    const live = st.find((s) => s.warp === 'on' || s.warp === 'plus');
-    const cell = (s) => [s.stack, s.warp === 'on' || s.warp === 'plus'
-      ? `<span class="num">${num(s.rtt, 0)}</span> <small>ms · ${esc(s.colo || '?')}</small>`
-      : `<span class="num">${s.warp === 'off' ? '未走 WARP' : '不通'}</span>`];
-    const u24 = upPct(d.up24);
-    const cells = [
-      ...st.map(cell),
-      ['24 小时可用', `<span class="num${u24 != null && u24 < 95 ? ' bad-t' : ''}">${upText(d.up24)}</span> <small>${d.up24?.n ? `${esc(d.up24.ok)}/${esc(d.up24.n)}` : ''}</small>`],
-      ['账户', `${esc(d.account || '?')} <small>${num(d.account_days, 0)} 天</small>`],
-    ];
-    if (st.length < 2) cells.splice(1, 0, ['上次故障', `<span class="num">${d.last_fail ? esc(ago(d.last_fail)) : '近 8 天无'}</span>`]);
-    const hero = `<div class="hero">
-        <div class="big colo"><b>${esc(live?.colo || '–')}</b><span>${live ? `出口${live.loc ? `<br>${esc(live.loc)}` : ''}` : '没有出口'}</span></div>
-        ${stats(cells.slice(0, 4))}
+    const live = st.filter((x) => x.warp === 'on' || x.warp === 'plus');
+    const colos = [...new Set(live.map((x) => x.colo).filter(Boolean))].join(' / ');
+    const exit = live.length ? `${esc(colos || '?')}${live[0].loc ? `<small> · ${esc(live[0].loc)}</small>` : ''}` : '<small>没有出口</small>';
+    const stack = (x) => `<span class="wk-st"><small>${esc(x.stack.replace('IP', ''))}</small> ${x.warp === 'on' || x.warp === 'plus'
+      ? `<b class="num">${num(x.rtt, 0)}</b><small>ms</small>` : `<b class="bad-t">${x.warp === 'off' ? '未走 WARP' : '不通'}</b>`}</span>`;
+    const u24 = d.up24?.n ? (d.up24.ok / d.up24.n) * 100 : null;
+    const meta = [`7 天 ${upText(d.up7)}`, d.renews ? `换号 ${num(d.renews, 0)} 次（上次 ${ago(d.last_renew)}）` : '没换过号',
+      `账户 ${num(d.account_days, 0)} 天`, `上报 ${ago(src.ts)}`].join(' · ');
+    const msg = !good ? `⚠️ ${d.reason || '不可用'}${d.fail_since ? `（已持续 ${ago(d.fail_since).replace(/ ?前$/, '')}）` : ''}`
+      : d.action ? `🛠 ${d.action}` : d.kind === 'recovered' && d.note ? `🛠 ${d.note}` : '';
+    return `<div class="wk${off ? ' is-off' : ''}">
+        <div class="wk-l1"><i class="wk-dot ${cls}"></i><b class="wk-name">${esc(d.name || src.source.split(':')[1])}</b>
+          ${d.account === 'WARP+' ? '<span class="wk-tag">WARP+</span>' : ''}${word ? `<span class="wk-word ${cls}">${esc(word)}</span>` : ''}
+          <span class="wk-exit">${exit}</span></div>
+        <div class="wk-l2">${st.map(stack).join('')}<span class="wk-sp"></span>${upStrip(hist.up)}
+          <b class="num wk-pct${u24 != null && u24 < 95 ? ' bad-t' : ''}">${upText(d.up24)}</b></div>
+        ${line('', meta, 'muted small')}
+        ${msg ? line('', msg, good ? '' : 'bad') : ''}
       </div>`;
-    const renew = `自动换号 ${num(d.renews, 0)} 次${d.renews ? `（上次 ${ago(d.last_renew)}）` : ''} · 重载 ${num(d.reloads, 0)} 次`
-      + (st.length < 2 ? '' : ` · 上次故障 ${d.last_fail ? ago(d.last_fail) : '近 8 天没有'}`);   // 单栈时这项在数字格里
-    const down = !good && d.fail_since ? `（已持续 ${ago(d.fail_since).replace(/ ?前$/, '')}）` : '';
-    const [c1, c2] = st.length >= 2
-      ? [chart(hist.rtt4, { label: 'IPv4 延迟', unit: ' ms', color: 'var(--accent-orange)', digits: 0 }),
-         chart(hist.rtt6, { label: 'IPv6 延迟', unit: ' ms', color: 'var(--accent-blue)', digits: 0 })]
-      : [chart(st[0]?.stack === 'IPv6' ? hist.rtt6 : hist.rtt4, { label: '延迟', unit: ' ms', color: 'var(--accent-orange)', digits: 0 }),
-         chart(rollingUp(hist.up), { label: '24 小时可用率', unit: '%', color: 'var(--accent-green)', digits: 1 })];
-    const body = hero
-      + (good ? line('🛠', d.action || d.note || '无需处理', d.action ? '' : 'muted')
-              : line('⚠️', `${d.reason || '不可用'}${down}`, 'bad'))
-      + line(good ? '📈' : '🛠', good ? `7 天可用率 ${upText(d.up7)}${d.up7?.n ? `（${d.up7.ok}/${d.up7.n} 次检查）` : ''}${st.length < 2 && st[0] ? ` · 只走 ${st[0].stack}` : ''}`
-        : (d.action || d.note || '等下一次检查'), 'muted')
-      + line('🔁', renew, 'muted small')
-      + charts2(c1, c2);
-    const badges = `<span class="badge ${kc}">${esc(kl)}</span>`;
-    const foot = `<span>${esc(d.host || '')}${d.singbox ? ` · sing-box ${esc(d.singbox)}` : ''}</span><span>MTU ${esc(d.mtu ?? '?')} · v${esc(d.version || '?')}</span>`;
-    return card(src, tbTitle('Cloudflare', 'WARP', esc(d.name || src.source.split(':')[1] || '')), badges, body, foot, { cls: 'tb cfst warp' });
+  }
+  function warpCard(list, histOf) {
+    const rank = (s) => (isOffline(s) ? 1 : WK_GOOD.has(s.data?.kind) ? 2 : 0);
+    const rows = [...list].sort((a, b) => rank(a) - rank(b) || String(a.data?.name).localeCompare(String(b.data?.name)));
+    const bad = rows.filter((s) => rank(s) < 2).length;
+    const latest = list.reduce((a, b) => (b.ts > a.ts ? b : a));
+    const badges = bad ? `<span class="badge bad">${bad} 台异常</span>` : '<span class="badge ok">全部正常</span>';
+    const foot = '<span>色块 = 近 24 小时每小时通（绿）断（红）· % = 24 小时可用率</span>';
+    return card({ ts: latest.ts, interval: latest.interval }, tbTitle('Cloudflare', 'WARP', `${list.length} 台`), badges,
+      rows.map((s) => warpRow(s, histOf(s.source))).join(''), foot, { cls: 'tb warp' });
   }
 
   // ---------- 账单汇总（顶部两格） ----------
@@ -628,7 +631,7 @@
       ...tb.flatMap((s) => trafficItems(s, hist(s.source), cdt.length > 0)),
       ...cdt.map((s) => cdtItem(s, hist(s.source))),
       ...cfst.map((s) => ({ group: '', html: cfstCard(s, hist(s.source)) })),
-      ...warp.map((s) => ({ group: 'WARP', html: warpCard(s, hist(s.source)) })),
+      ...(warp.length ? [{ group: '', html: warpCard(warp, hist) }] : []),
       ...other.map((s) => ({ group: '', html: card(s, esc(s.source), '<span class="badge ink">未识别</span>', `<pre class="tg">${esc(JSON.stringify(s.data, null, 2))}</pre>`) })),
     ];
     if (!sources.length) {
