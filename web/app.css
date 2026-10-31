@@ -34,12 +34,12 @@ button { font: inherit; color: inherit; }
   z-index: 100;
   background: var(--accent);
   color: var(--black);
-  border-bottom: var(--border-width) solid var(--black);
+  border-bottom: var(--border-width) solid var(--frame);
 }
 .header-content {
   display: flex; justify-content: space-between; align-items: center; gap: 1rem;
   padding: 0.85rem 1.5rem;
-  border-bottom: 3px solid var(--black);
+  border-bottom: 3px solid var(--frame);
 }
 .logo { display: flex; align-items: center; gap: 0.75rem; text-decoration: none; color: var(--black); }
 .logo h1 { font-size: 1.5rem; }
@@ -52,7 +52,7 @@ button { font: inherit; color: inherit; }
   width: 44px; height: 44px;
   display: flex; align-items: center; justify-content: center;
   background: var(--white); color: var(--black);
-  border: 3px solid var(--black);
+  border: 3px solid var(--frame);
   box-shadow: 3px 3px 0 var(--shadow);
   cursor: pointer;
   transition: transform 0.1s ease, box-shadow 0.1s ease;
@@ -68,7 +68,7 @@ button { font: inherit; color: inherit; }
 .stat-item {
   flex: 1; min-width: 90px;
   padding: 0.7rem 1rem;
-  border-right: 3px solid var(--black);
+  border-right: 3px solid var(--frame);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
 }
 .stat-item:last-child { border-right: none; }
@@ -86,7 +86,7 @@ button { font: inherit; color: inherit; }
   position: relative;
   container-type: inline-size;   /* 里面的大字按卡片宽度缩放 */
   background: var(--card-bg);
-  border: var(--border-width) solid var(--black);
+  border: var(--border-width) solid var(--frame);
   box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--shadow);
   display: flex; flex-direction: column;
   min-width: 0;
@@ -94,7 +94,7 @@ button { font: inherit; color: inherit; }
 .card-head {
   display: flex; align-items: center; gap: 0.4rem; flex-wrap: nowrap;   /* 一行：放不下时先省略副标题 */
   padding: 0.4rem 0.65rem;
-  border-bottom: 3px solid var(--black);
+  border-bottom: 3px solid var(--frame);
 }
 .card-head h3 { font-size: 0.98rem; flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card-head .badge { flex-shrink: 0; }
@@ -114,7 +114,7 @@ button { font: inherit; color: inherit; }
 .badge {
   display: inline-flex; align-items: center; gap: 0.3rem;
   height: 24px; padding: 0 0.45rem;
-  border: 2px solid var(--black);
+  border: 2px solid var(--frame);
   font: 700 0.7rem 'Space Grotesk', sans-serif; letter-spacing: 0.06em; text-transform: uppercase;
   white-space: nowrap;
   background: var(--card-bg);
@@ -153,13 +153,13 @@ button { font: inherit; color: inherit; }
 .bar {
   position: relative;
   height: 13px;
-  border: 2px solid var(--black);
+  border: 2px solid var(--frame);
 }
 /* 刻度：10 个格子，每格右边一条 2px 的边框。边框按整像素画，页面缩放时每条一样粗（渐变画的线会有粗有细） */
 .bar > .ticks { position: absolute; inset: 0; display: flex; }
 .bar > .ticks > u { flex: 1; border-right: 2px solid var(--line); text-decoration: none; }
 .bar > .ticks > u:last-child { border-right: none; }
-.bar > i { position: absolute; inset: 0 auto 0 0; background: var(--sig-1); border-right: 2px solid var(--black); }
+.bar > i { position: absolute; inset: 0 auto 0 0; background: var(--sig-1); border-right: 2px solid var(--frame); }
 .bar > i.l2 { background: var(--sig-2); }
 .bar > i.l3 { background: var(--sig-3); }
 .bar > i.l4 { background: var(--sig-4); }
@@ -167,7 +167,7 @@ button { font: inherit; color: inherit; }
 .bar > i.zero { border-right: none; }
 .bar > b { /* 熔断线等标记 */
   position: absolute; top: -6px; bottom: -6px; width: 0;
-  border-left: 3px solid var(--black);
+  border-left: 3px solid var(--frame);
 }
 .bar > b::after {
   content: attr(data-label);
@@ -255,7 +255,7 @@ button { font: inherit; color: inherit; }
   position: fixed; z-index: 350; pointer-events: none;
   padding: 0.3rem 0.5rem;
   background: var(--black); color: var(--white);
-  border: 2px solid var(--black); box-shadow: 3px 3px 0 var(--accent);
+  border: 2px solid var(--frame); box-shadow: 3px 3px 0 var(--accent);
   font: 700 0.72rem 'Space Grotesk', sans-serif; white-space: nowrap;
 }
 
@@ -299,7 +299,7 @@ blockquote.bd { border-left: 4px solid var(--accent); padding: 0.2rem 0 0.2rem 0
 .legend { display: flex; flex-wrap: wrap; gap: 0.35rem 1.25rem; margin: -0.25rem 0 0.9rem; font-size: 0.7rem; font-weight: 700; color: var(--text-muted); }
 .legend > span { display: inline-flex; align-items: center; gap: 0.4rem; }
 .legend i { display: inline-block; flex-shrink: 0; }
-.lg-bar { width: 26px; height: 10px; border: 2px solid var(--black); background: linear-gradient(90deg, var(--sig-1) 55%, transparent 55%); }
+.lg-bar { width: 26px; height: 10px; border: 2px solid var(--frame); background: linear-gradient(90deg, var(--sig-1) 55%, transparent 55%); }
 .lg-ls { width: 30px; height: 14px; flex-shrink: 0; overflow: visible; }
 .lg-ls .mid { stroke: var(--black); stroke-width: 1; opacity: 0.25; }
 .lg-ls .ref { stroke: var(--black); stroke-width: 1.2; stroke-dasharray: 3 2; }
@@ -307,7 +307,7 @@ blockquote.bd { border-left: 4px solid var(--accent); padding: 0.2rem 0 0.2rem 0
 .lg-bd { width: 4px; height: 14px; background: var(--accent); }
 
 /* ---------- 空状态 / 加载 ---------- */
-.empty { text-align: center; padding: 3.5rem 2rem; border: 4px dashed var(--black); background: var(--card-bg); }
+.empty { text-align: center; padding: 3.5rem 2rem; border: 4px dashed var(--frame); background: var(--card-bg); }
 .empty h2 { font-size: 1.3rem; margin-bottom: 0.4rem; }
 .empty p { color: var(--text-muted); line-height: 1.6; }
 .empty code { font-family: ui-monospace, Menlo, Consolas, monospace; background: var(--bg); padding: 0 0.3rem; }
@@ -316,7 +316,7 @@ blockquote.bd { border-left: 4px solid var(--accent); padding: 0.2rem 0 0.2rem 0
 .loading-panel {
   display: flex; align-items: center; gap: 0.75rem;
   padding: 0.9rem 1.25rem;
-  background: var(--white); border: 3px solid var(--black); box-shadow: 4px 4px 0 var(--shadow);
+  background: var(--white); border: 3px solid var(--frame); box-shadow: 4px 4px 0 var(--shadow);
   font: 700 0.8rem 'Space Grotesk', sans-serif; letter-spacing: 0.15em;
 }
 .pixel-loader { display: inline-flex; gap: 3px; }
@@ -327,7 +327,7 @@ blockquote.bd { border-left: 4px solid var(--accent); padding: 0.2rem 0 0.2rem 0
 
 .banner {
   margin-bottom: 1.25rem; padding: 0.6rem 0.9rem;
-  border: 3px solid var(--black); background: var(--accent-red); color: #fff;
+  border: 3px solid var(--frame); background: var(--accent-red); color: #fff;
   font-weight: 700; font-size: 0.85rem; box-shadow: 4px 4px 0 var(--shadow);
 }
 
@@ -338,7 +338,7 @@ blockquote.bd { border-left: 4px solid var(--accent); padding: 0.2rem 0 0.2rem 0
   max-height: calc(100vh - 96px); overflow-y: auto;
   padding: 0.75rem;
   background: var(--white); color: var(--black);
-  border: 3px solid var(--black); box-shadow: 6px 6px 0 var(--shadow);
+  border: 3px solid var(--frame); box-shadow: 6px 6px 0 var(--shadow);
 }
 .theme-menu-head { font-family: 'Archivo Black', sans-serif; font-size: 0.85rem; padding-bottom: 0.5rem; margin-bottom: 0.5rem; border-bottom: 2px solid var(--line); }
 .theme-menu-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
@@ -350,16 +350,16 @@ blockquote.bd { border-left: 4px solid var(--accent); padding: 0.2rem 0 0.2rem 0
   font: 700 0.72rem 'Space Grotesk', sans-serif; letter-spacing: 0.04em; text-transform: uppercase;
   text-align: left; cursor: pointer;
 }
-.theme-item:hover, .theme-item:focus-visible { border-color: var(--black); background: var(--bg); outline: none; }
-.theme-item[aria-checked="true"] { border-color: var(--black); background: var(--accent); color: var(--on-accent); }
-.swatch { display: inline-grid; grid-template-columns: 1fr 1fr; width: 18px; height: 18px; border: 2px solid var(--black); flex-shrink: 0; }
+.theme-item:hover, .theme-item:focus-visible { border-color: var(--frame); background: var(--bg); outline: none; }
+.theme-item[aria-checked="true"] { border-color: var(--frame); background: var(--accent); color: var(--on-accent); }
+.swatch { display: inline-grid; grid-template-columns: 1fr 1fr; width: 18px; height: 18px; border: 2px solid var(--frame); flex-shrink: 0; }
 .swatch i:first-child { background: var(--sw-paper); }
 .swatch i:last-child { background: var(--sw-accent); }
 
 /* ---------- 页脚 ---------- */
 .footer {
   background: var(--black); color: var(--white);
-  border-top: var(--border-width) solid var(--black);
+  border-top: var(--border-width) solid var(--frame);
   padding: 1rem 1.5rem;
   margin-top: 1rem;
 }
@@ -375,7 +375,7 @@ blockquote.bd { border-left: 4px solid var(--accent); padding: 0.2rem 0 0.2rem 0
   .header-content { padding: 0.6rem 1rem; }
   .logo h1 { font-size: 1.15rem; }
   .stats-bar { flex-wrap: wrap; }
-  .stat-item { padding: 0.5rem 0.4rem; min-width: 0; flex: 1 0 33.33%; border-bottom: 3px solid var(--black); }
+  .stat-item { padding: 0.5rem 0.4rem; min-width: 0; flex: 1 0 33.33%; border-bottom: 3px solid var(--frame); }
   .stat-item:nth-child(3n) { border-right: none; }
   .stat-item:nth-last-child(-n+3) { border-bottom: none; }
   .stat-value { font-size: 1.15rem; }
