@@ -465,14 +465,27 @@
   const WK_GOOD = new Set(['ok', 'recovered', 'init', 'renewed', 'plus']);
   const upText = (u) => (u && u.n > 0 ? `${num((u.ok / u.n) * 100, 1)}%` : '–');
   const HOUR = 3600;
-  function upStrip(pts) {   // 近 24 小时，每小时一格
+  // 近 24 小时，每小时一格。画成 SVG，坐标直接用物理像素：格宽 ≈ 4px、间隙 ≈ 1px 都取整到 devicePixelRatio 的整数倍，
+  // 再用 crispEdges 让每条边对齐像素。HTML 方块做不到：缩放 125% / 150% 时 1px 间隙是 1.25 / 1.5 个物理像素，
+  // 浏览器排版又按 1/64 CSS 像素取整，每道间隙取整的结果不一样，就有宽有窄（还会出现半透明的灰边）。
+  // 换屏幕 / 改缩放时 devicePixelRatio 会变，watchDpr 会重画
+  function upStrip(pts) {
     const by = new Map((pts || []).map(([t, v]) => [Math.floor(t / HOUR), v]));
     const h0 = Math.floor(nowSec() / HOUR) - 23;
-    return `<span class="wk-strip" aria-label="近 24 小时每小时是否正常">${Array.from({ length: 24 }, (_, i) => {
+    const r = window.devicePixelRatio || 1;
+    const cw = Math.max(1, Math.round(4 * r)), gw = Math.max(1, Math.round(r)), hh = Math.max(1, Math.round(14 * r));
+    // SVG 的宽高还得是整数 CSS 像素，否则浏览器排版时取整，SVG 内部的缩放就不正好是 devicePixelRatio，越往后偏得越多：
+    // 画布往左 / 往下补几个物理像素，补到能整除为止（125% 补到 5 的倍数，150% 补到 3 的倍数……）
+    const fit = (n) => { for (let k = n; k < n + 64; k++) if (Math.abs(k / r - Math.round(k / r)) < 1e-3) return k; return n; };
+    const base = 24 * cw + 23 * gw + 1;   // 右边多留 1 个物理像素给 alignStrips 挪动
+    const w = fit(base), h = fit(hh);
+    const x0 = w - base, y0 = Math.floor((h - hh) / 2);
+    const cells = Array.from({ length: 24 }, (_, i) => {
       const v = by.get(h0 + i);
-      const cls = v == null ? '' : v > 0 ? ' up' : ' down';
-      return `<i class="${cls.trim()}" title="${esc(fullTime((h0 + i) * HOUR))} ${v == null ? '没有数据' : v > 0 ? '正常' : '不通'}"></i>`;
-    }).join('')}</span>`;
+      const cls = v == null ? '' : v > 0 ? 'up' : 'down';
+      return `<rect x="${x0 + i * (cw + gw)}" y="${y0}" width="${cw}" height="${hh}" class="${cls}"><title>${esc(fullTime((h0 + i) * HOUR))} ${v == null ? '没有数据' : v > 0 ? '正常' : '不通'}</title></rect>`;
+    }).join('');
+    return `<span class="wk-strip"><svg viewBox="0 0 ${w} ${h}" width="${Math.round(w / r)}" height="${Math.round(h / r)}" shape-rendering="crispEdges" role="img" aria-label="近 24 小时每小时是否正常">${cells}</svg></span>`;
   }
   function warpRow(src, hist) {
     const d = src.data || {};
@@ -568,7 +581,7 @@
     const cols = Array.from({ length: n }, () => Object.assign(document.createElement('div'), { className: 'col' }));
     box.replaceChildren(...cols);
     cards.forEach((c) => cols[0].appendChild(c));             // 先放进同宽的一列里量高度
-    if (n === 1) { fitSubs(); return; }
+    if (n === 1) { fitSubs(); alignStrips(); return; }
     const hOf = new Map(cards.map((c) => [c, c.offsetHeight + GAP]));
     const total = cards.reduce((a, c) => a + hOf.get(c), 0);
     // 连续的同组卡片合成一组
@@ -587,6 +600,7 @@
     }
     bins.forEach((b, k) => b.sort((x, y) => x.dataset.i - y.dataset.i).forEach((c) => cols[k].appendChild(c)));
     fitSubs();
+    alignStrips();
   }
   // 卡头放不下时，副标题被挤得只剩一两个字就整段不显示（悬停卡名能看到）
   function fitSubs() {
@@ -595,6 +609,23 @@
       if (s.scrollWidth > s.clientWidth && s.clientWidth < 56) { s.hidden = true; s.closest('h3').title = s.textContent; }
     });
   }
+  // SVG 自己的左边缘可能落在物理像素中间：正好差半个像素时，各条边按像素中心取舍会有的进有的舍（如 175% 时偶尔一格窄 1 像素）。
+  // 量出偏了多少，用 viewBox 把内容反向挪回去，让每条边都正好落在像素边界上（不用 CSS transform，那样会变成抗锯齿的灰边）
+  function alignStrips() {
+    const r = window.devicePixelRatio || 1;
+    document.querySelectorAll('.wk-strip svg').forEach((s) => {
+      const vb = s.viewBox.baseVal;
+      const x = s.getBoundingClientRect().left * r;
+      vb.x = Math.round((x - Math.round(x)) * 1000) / 1000;
+    });
+  }
+  // WARP 色块按物理像素画（见 upStrip），devicePixelRatio 变了（拖到另一块屏幕、改浏览器缩放）就重画
+  function watchDpr() {
+    window.matchMedia?.(`(resolution: ${window.devicePixelRatio || 1}dppx)`)
+      .addEventListener?.('change', () => { render(); watchDpr(); }, { once: true });
+  }
+  watchDpr();
+
   let resizeTimer = 0, lastW = 0;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
@@ -653,14 +684,46 @@
         <span><i class="lg-bd"></i>明细：上面的数由哪几部分组成</span></div>`
         + `<div class="mason">${items.map((it, i) => it.html.replace('<article ', `<article data-i="${i}" data-g="${esc(it.group || '')}" `)).join('')}</div>`;
     }
-    main.innerHTML = html;
-    lastW = window.innerWidth;
-    masonry();
+    paint(main, html);
     $('#ft-updated').textContent = `更新于 ${fullTime(nowSec())}`;
   }
 
-  async function getJSON(path) {
-    const r = await fetch(`${API}${path}`, { cache: 'no-store' });
+  // 定时刷新时只换内容变了的卡片：卡片留在原来那一列，页面不整块重建，滚动位置不动。
+  // 换完只有卡片高度变了才重新排瀑布流；来源增减（卡片数量 / 分组变了）或第一次画时才整页重画
+  function paint(main, html) {
+    const y = window.scrollY;
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    const box = main.querySelector('.mason');
+    const next = tpl.content.querySelector('.mason');
+    const olds = box ? [...box.querySelectorAll('.card')].sort((a, b) => a.dataset.i - b.dataset.i) : [];
+    const news = next ? [...next.children] : [];
+    const same = box && next && olds.length === news.length && olds.every((c, i) => c.dataset.g === news[i].dataset.g);
+    if (!same) {
+      main.replaceChildren(tpl.content);
+      lastW = window.innerWidth;
+      masonry();
+    } else {
+      // 瀑布流前面的提示条 / 图例照换
+      for (const el of [...main.children]) if (el !== box) el.remove();
+      box.before(...[...tpl.content.children].filter((el) => el !== next));
+      let moved = false;
+      olds.forEach((c, i) => {
+        const n = news[i];
+        if (c.outerHTML === n.outerHTML) return;
+        const h = c.offsetHeight;
+        c.replaceWith(n);
+        if (n.offsetHeight !== h) moved = true;
+      });
+      if (moved) masonry(); else { fitSubs(); alignStrips(); }
+    }
+    if (window.scrollY !== y) window.scrollTo(0, y);
+  }
+
+  // 曲线走浏览器缓存（Worker 给的 max-age 是它那份缓存剩下的时间），5 分钟内刷新页面不再请求 Worker；
+  // 最新状态每次都要新的
+  async function getJSON(path, cache = 'no-store') {
+    const r = await fetch(`${API}${path}`, { cache });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     return r.json();
   }
@@ -670,7 +733,7 @@
     if (!API) { render(); return; }
     try {
       const jobs = [getJSON('/api/status')];
-      if (force || Date.now() - lastHistory >= HISTORY_MS) jobs.push(getJSON('/api/history'));
+      if (force || Date.now() - lastHistory >= HISTORY_MS) jobs.push(getJSON('/api/history', 'default'));
       const [st, hi] = await Promise.all(jobs);
       state.status = st;
       if (hi) { state.history = hi.series || {}; lastHistory = Date.now(); }

@@ -92,27 +92,45 @@ async function removeSource(req, env, source) {
   return json({ ok: true });
 }
 
-// data 列存的就是上报时 JSON.stringify 过的文本，直接拼进响应，不再解析一遍再序列化一遍
-// （这个接口每 30 秒被每个打开的页面读一次，是 Worker 最常跑的路径）
+// 读接口的 JSON 全部在 D1 的 SQL 里拼好（json_group_array / json_object），Worker 只拿回一个字符串、前后接上外壳。
+// 以前是把几千行历史逐行拿回 Worker 再组装：D1 返回的每一行都要在 Worker 里反序列化成对象，再 JSON.stringify，
+// 打开 / 刷新页面时这一步常常超过免费版每次 10ms 的 CPU。SQL 在 D1 那边执行，不算 Worker 的 CPU。
+//   data 列是上报时 JSON.stringify 过的文本，json() 原样嵌进去；万一有坏数据用 null 代替，不让整个查询失败
+const STATUS_SQL = `SELECT json_group_array(json_object(
+    'source', source, 'ts', ts, 'interval', interval, 'received', received,
+    'data', CASE WHEN json_valid(data) THEN json(data) END)) AS j
+  FROM (SELECT source, ts, interval, data, received FROM latest ORDER BY source)`;
+
+// 这个接口每 30 秒被每个打开的页面读一次，是 Worker 最常跑的路径
 async function status(env) {
-  const { results } = await env.DB.prepare('SELECT source, ts, interval, data, received FROM latest ORDER BY source').all();
-  const items = results.map((r) => {
-    const data = typeof r.data === 'string' && r.data.startsWith('{') && r.data.endsWith('}') ? r.data : 'null';
-    return `{"source":${JSON.stringify(r.source)},"ts":${Number(r.ts) || 0},"interval":${Number(r.interval) || 0},`
-      + `"received":${Number(r.received) || 0},"data":${data}}`;
-  });
-  return new Response(`{"now":${Math.floor(Date.now() / 1000)},"sources":[${items.join(',')}]}`, {
+  const j = await env.DB.prepare(STATUS_SQL).first('j');
+  return new Response(`{"now":${Math.floor(Date.now() / 1000)},"sources":${j || '[]'}}`, {
     headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS, 'Cache-Control': 'no-store' },
   });
 }
 
-// 曲线不需要实时，缓存 5 分钟，D1 读取量和打开页面的次数基本无关。两层：
-//   Worker 实例内存（哪里都能用，命中时连缓存 I/O 都没有）；边缘 Cache API（只在自定义域名上起作用，workers.dev 上是空操作）
+// { 来源: { 指标: [[整点, 值], …] } }，每条按时间升序（子查询排好序，GROUP BY 按这个顺序聚合）
+const HISTORY_SQL = `SELECT json_group_object(source, json(s)) AS j FROM (
+    SELECT source, json_group_object(key, json(p)) AS s FROM (
+      SELECT source, key, json_group_array(json_array(hour, v)) AS p FROM (
+        SELECT source, key, hour, v FROM history WHERE hour >= ?1 ORDER BY source, key, hour
+      ) GROUP BY source, key
+    ) GROUP BY source
+  )`;
+
+// 曲线不需要实时，缓存 5 分钟。三层：
+//   浏览器（max-age，5 分钟内刷新页面根本不发请求）；Worker 实例内存（哪里都能用，命中时连缓存 I/O 都没有）；
+//   边缘 Cache API（只在自定义域名上起作用，workers.dev 上是空操作）
 const HISTORY_TTL = 300_000;
 let historyMemo = null; // { at, body }
+const historyHeaders = (ageMs) => ({
+  'Content-Type': 'application/json; charset=utf-8', ...CORS,
+  'Cache-Control': `public, max-age=${Math.max(0, Math.floor((HISTORY_TTL - ageMs) / 1000))}`,
+});
 async function history(req, env, ctx) {
-  const headers = { 'Content-Type': 'application/json; charset=utf-8', ...CORS, 'Cache-Control': 'public, max-age=300' };
-  if (historyMemo && Date.now() - historyMemo.at < HISTORY_TTL) return new Response(historyMemo.body, { headers });
+  if (historyMemo && Date.now() - historyMemo.at < HISTORY_TTL) {
+    return new Response(historyMemo.body, { headers: historyHeaders(Date.now() - historyMemo.at) });
+  }
   const cache = caches.default;
   const key = new Request(new URL('/api/history', req.url).toString());
   const hit = await cache.match(key);
@@ -120,14 +138,10 @@ async function history(req, env, ctx) {
 
   const days = Number(env.HISTORY_DAYS) || 7;
   const since = Math.floor(Date.now() / 1000) - days * 86400;
-  const { results } = await env.DB.prepare(
-    'SELECT source, key, hour, v FROM history WHERE hour >= ?1 ORDER BY source, key, hour',
-  ).bind(since).all();
-  const out = {};
-  for (const r of results) ((out[r.source] ??= {})[r.key] ??= []).push([r.hour, r.v]);
-  const body = JSON.stringify({ since, series: out });
+  const j = await env.DB.prepare(HISTORY_SQL).bind(since).first('j');
+  const body = `{"since":${since},"series":${j || '{}'}}`;
   historyMemo = { at: Date.now(), body };
-  const res = new Response(body, { headers });
+  const res = new Response(body, { headers: historyHeaders(0) });
   ctx.waitUntil(cache.put(key, res.clone()));
   return res;
 }

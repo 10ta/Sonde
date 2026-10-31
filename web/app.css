@@ -227,9 +227,11 @@ button { font: inherit; color: inherit; }
 .wk-st { font-size: 0.85rem; flex-shrink: 0; }
 .wk-st small { font-size: 0.62rem; font-weight: 700; color: var(--text-muted); letter-spacing: 0.04em; }
 .wk-sp { flex: 1 1 auto; }
-.wk-strip { display: inline-flex; gap: 1px; flex-shrink: 1; min-width: 0; overflow: hidden; }
-.wk-strip i { width: 4px; height: 14px; background: var(--hatch); flex-shrink: 0; }
-.wk-strip i.up { background: var(--sig-1); } .wk-strip i.down { background: var(--accent-red); }
+/* 色块是按物理像素画的 SVG（见 app.js 的 upStrip），不能缩放；放不下时从左边裁掉最早的几个小时 */
+.wk-strip { display: flex; justify-content: flex-end; flex-shrink: 1; min-width: 0; overflow: hidden; }
+.wk-strip svg { display: block; flex-shrink: 0; }
+.wk-strip rect { fill: var(--hatch); }
+.wk-strip rect.up { fill: var(--sig-1); } .wk-strip rect.down { fill: var(--accent-red); }
 .wk-pct { font-size: 0.85rem; min-width: 3.3em; text-align: right; flex-shrink: 0; }
 .bad-t { color: var(--sig-text-5); }
 .note { font-size: 0.8rem; line-height: 1.45; overflow-wrap: anywhere; }
